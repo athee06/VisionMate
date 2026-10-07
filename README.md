@@ -20,10 +20,12 @@ Images are never sent to the internet. No accounts, no API keys, no usage limits
 | NVDA+Alt+A | Describe the current element |
 | NVDA+Alt+F | Describe the whole screen |
 | NVDA+Alt+D | Describe the image, or copied image file, on the clipboard |
+| NVDA+Alt+G | Turn automatic descriptions of unlabeled images on or off |
 
 - Press a command **once** for a quick spoken description.
 - Press it **twice** for a detailed description that reads all text, in a window with Copy and Close buttons.
 - Press **Control** to stop speaking.
+- **Automatic descriptions** (off by default): images without a label are described in one sentence as you read web pages and documents.
 
 You can change the commands in NVDA's Input Gestures dialog, under VisionMate.
 
