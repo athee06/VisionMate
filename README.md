@@ -61,10 +61,8 @@ Your computer may be faster or slower.
 
 ## Accuracy
 
-Descriptions are written by AI and can be wrong. VisionMate can miss or misread details, especially small text,
-numbers, and busy screenshots. One-sentence automatic descriptions are the least detailed.
-For anything important, such as amounts, dates, names or medicine labels, check another way,
-for example with NVDA's built-in text recognition (NVDA+R).
+VisionMate uses AI, and AI can make mistakes. Descriptions may miss or misread details,
+so please double-check anything important.
 
 ## Privacy
 
