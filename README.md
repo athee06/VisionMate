@@ -23,7 +23,7 @@ Images are never sent to the internet. No accounts, no API keys, no usage limits
 | NVDA+Alt+G | Turn automatic descriptions of unlabeled images on or off |
 
 - Press a command **once** for a quick spoken description.
-- Press it **twice** for a detailed description that reads all text, in a window with Copy and Close buttons.
+- Press it **twice** for a longer, more detailed description, including visible text, in a window with Copy and Close buttons.
 - Press **Control** to stop speaking.
 - **Automatic descriptions** (off by default): images without a label are described in one sentence as you read web pages and documents.
 
@@ -38,8 +38,33 @@ answer in NVDA's language, beep while waiting, and automatic update checks.
 
 - Windows 10 or 11, 64-bit
 - NVDA 2024.1 or later
-- About 2 GB of free disk space and 8 GB of RAM or more. A graphics card that supports Vulkan makes it much faster;
-  without one, VisionMate uses the processor.
+- About 2 GB of free disk space, and 8 GB of RAM or more (VisionMate uses about 3 GB while it is ready)
+- A graphics chip or card that supports Vulkan makes it much faster. Without one, VisionMate uses the processor.
+
+## What to expect
+
+Measured on one laptop: Intel Core Ultra 5 135U with its built-in Intel graphics, 32 GB RAM.
+Your computer may be faster or slower.
+
+| | With graphics (default) | Processor only |
+|---|---|---|
+| Quick description: first words | about 2 seconds | about 5 seconds |
+| Quick description: finished | 5 to 7 seconds | 8 to 11 seconds |
+| Detailed description: first words | 3 to 5 seconds | 10 to 14 seconds |
+| Detailed description: finished | 16 to 28 seconds | 40 to 47 seconds |
+| Memory (RAM) while ready | about 2.8 GB, up to 3.1 GB | about 2.7 GB, up to 3.2 GB |
+
+- Getting ready takes about 4 seconds. With "Get ready when NVDA starts" on (the default), this happens in the
+  background when NVDA starts. If you turn it off, the first description takes about 4 seconds longer, and memory
+  is used from then until NVDA restarts.
+- Images full of text, like receipts and documents, take longer than photos.
+
+## Accuracy
+
+Descriptions are written by AI and can be wrong. VisionMate can miss or misread details, especially small text,
+numbers, and busy screenshots. One-sentence automatic descriptions are the least detailed.
+For anything important, such as amounts, dates, names or medicine labels, check another way,
+for example with NVDA's built-in text recognition (NVDA+R).
 
 ## Privacy
 
