@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>VisionMate</title></head>
+<body>
+<h1>VisionMate</h1>
+<p>VisionMate describes images, screens and on-screen elements on your own computer.
+Images are never sent to the internet, it works without a connection, and there are no accounts, keys or usage limits.</p>
+
+<h2>Getting started</h2>
+<p>After you install VisionMate and restart NVDA, a welcome window opens. VisionMate needs its vision data
+(about 1.5 GB), which is downloaded only once. Press Enter to start the download. While it downloads,
+press Space to hear the progress. When it finishes, the window shows a short usage guide.
+If the download is interrupted, it continues from where it stopped next time.</p>
+
+<h2>Commands</h2>
+<ul>
+<li><kbd>NVDA+Alt+A</kbd>: describe the current element.</li>
+<li><kbd>NVDA+Alt+F</kbd>: describe the whole screen.</li>
+<li><kbd>NVDA+Alt+D</kbd>: describe the image on the clipboard, or an image file you copied in File Explorer.</li>
+<li><kbd>NVDA+Alt+G</kbd>: turn automatic descriptions on or off.</li>
+</ul>
+<p>Press a command once for a quick spoken description. Press it twice quickly for a longer, more detailed
+description, including visible text, shown in a window with Copy and Close buttons. Press Control to stop speaking.</p>
+<h2>Automatic descriptions</h2>
+<p>When automatic descriptions are on, VisionMate describes images that have no label (or only a file name)
+as you read web pages and documents in browse mode. NVDA reads the line as usual, then you hear "Image:"
+and a one-sentence description. Each image is described once and remembered, so returning to it is instant.
+Small icons are skipped, and moving on stops the description, so reading is never slowed down.
+Turn it on or off with <kbd>NVDA+Alt+G</kbd> or in VisionMate settings. It is off by default.</p>
+<p>You can change these commands in NVDA's Input Gestures dialog, under VisionMate.</p>
+
+<h2>Settings</h2>
+<p>NVDA menu, Preferences, Settings, VisionMate:</p>
+<ul>
+<li>Automatically describe images that have no label.</li>
+<li>Use the graphics card: much faster. If the graphics card fails, VisionMate switches to the processor automatically.</li>
+<li>Get ready when NVDA starts: the first description is as fast as the rest, but memory stays in use.</li>
+<li>Answer in NVDA's language.</li>
+<li>Beep while waiting for a description.</li>
+<li>Check for updates automatically, and a button to check now.</li>
+</ul>
+
+<h2>Accuracy</h2>
+<p>VisionMate uses AI, and AI can make mistakes. Descriptions may miss or misread details,
+so please double-check anything important.</p>
+
+<h2>Speed and memory</h2>
+<p>On a laptop with an Intel Core Ultra 5 and its built-in graphics, a quick description starts in about 2 seconds
+(about 5 seconds without the graphics chip), and a detailed one starts in 3 to 5 seconds. VisionMate uses about
+3 GB of memory while it is ready. Your computer may be faster or slower.</p>
+
+<h2>Privacy</h2>
+<p>VisionMate does not collect any information about you or your use. It connects to the internet only to
+download its vision data and to check for updates.</p>
+
+<h2>Credits</h2>
+<p>Uses <a href="https://github.com/ggml-org/llama.cpp">llama.cpp</a> (MIT licence).
+Licence information for the vision data is included with the data.</p>
+</body>
+</html>
