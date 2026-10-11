@@ -26,6 +26,9 @@ jobs:
                   content = local.read_bytes() if local.exists() else old.read(name)
                   if name.endswith('.py'):
                       assert content.split(b'\n\n', 1)[1] == old.read(name), name
+                  elif name == 'globalPlugins/visionMate/datainfo.json':
+                      assert json.loads(content) == json.loads(old.read(name)), name
+                      content = old.read(name)
                   elif name != 'manifest.ini':
                       assert content.rstrip(b'\r\n') == old.read(name).rstrip(b'\r\n'), name
                   package.writestr(name, content)
