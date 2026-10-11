@@ -1,0 +1,46 @@
+name: Package VisionMate 0.3.2
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble packaging-only release
+        run: |
+          python3 - <<'PY'
+          import hashlib, io, json, pathlib, shutil, urllib.request, zipfile
+          base = 'https://github.com/athee06/VisionMate/releases/download/v0.3.1/'
+          previous = urllib.request.urlopen(base + 'VisionMate-0.3.1.nvda-addon').read()
+          assert hashlib.sha256(previous).hexdigest() == 'a736fe2daed76f345fe26f983af17f878f342c22dcbcd07b58234b41d55d0b5f'
+          old = zipfile.ZipFile(io.BytesIO(previous))
+          root = pathlib.Path('addon')
+          assert 'version = 0.3.2' in (root / 'manifest.ini').read_text()
+          dist = pathlib.Path('dist'); dist.mkdir()
+          out = dist / 'VisionMate-0.3.2.nvda-addon'
+          with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as package:
+              for name in old.namelist():
+                  local = root / name
+                  content = local.read_bytes() if local.exists() else old.read(name)
+                  if name.endswith('.py'):
+                      assert content.split(b'\n\n', 1)[1] == old.read(name), name
+                  elif name != 'manifest.ini':
+                      assert content.rstrip(b'\r\n') == old.read(name).rstrip(b'\r\n'), name
+                  package.writestr(name, content)
+              for name in ('LICENSE', 'COPYING.txt'):
+                  package.writestr(name, (root / name).read_bytes())
+          with zipfile.ZipFile(out) as package:
+              assert package.testzip() is None
+          shutil.copyfile(out, dist / 'VisionMate.nvda-addon')
+          update = json.load(urllib.request.urlopen(base + 'update.json'))
+          update['addon'].update(version='0.3.2', changes='Packaging update: GPL v2 or later license notices and license text included, with a project homepage link. Features and update behavior are unchanged.', size=out.stat().st_size, sha256=hashlib.sha256(out.read_bytes()).hexdigest(), url='https://github.com/athee06/VisionMate/releases/download/v0.3.2/VisionMate-0.3.2.nvda-addon')
+          (dist / 'update.json').write_text(json.dumps(update, indent=2) + '\n')
+          print(update['addon'])
+          PY
+      - name: Publish approved 0.3.2 release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create v0.3.2 dist/VisionMate-0.3.2.nvda-addon dist/VisionMate.nvda-addon dist/update.json --target "$GITHUB_SHA" --title "VisionMate 0.3.2" --notes "Packaging update: GPL v2 or later license notices and license text are included, with a project homepage link. Features and update behavior are unchanged. Archive integrity and source checks passed. Windows/NVDA runtime testing of 0.3.2 is pending. Not yet submitted to the NVDA Add-on Store." --latest
