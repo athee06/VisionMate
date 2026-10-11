@@ -1,0 +1,9 @@
+dist/
+__pycache__/
+*.pyc
+*.gguf
+*.vmdata
+*.part
+*.log
+token*.txt
+*token*
