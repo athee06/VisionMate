@@ -1,0 +1,4 @@
+VisionMate add-on code
+Copyright (C) 2026 Athiban Vijay
+
+The Python code under globalPlugins/visionMate is licensed under the GNU General Public License, version 2 or later. See LICENSE. Third-party engine and vision-data components retain their own licenses.
