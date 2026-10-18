@@ -98,6 +98,15 @@ def prepareImage(image, maxSide):
 	return buf.getvalue()
 
 
+def imageMessages(jpegBytes, prompt):
+	"""The start of a conversation about one image."""
+	b64 = base64.b64encode(jpegBytes).decode("ascii")
+	return [{"role": "user", "content": [
+		{"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
+		{"type": "text", "text": prompt},
+	]}]
+
+
 def _lanczos():
 	from PIL import Image
 	return getattr(Image, "Resampling", Image).LANCZOS
@@ -204,17 +213,20 @@ class Engine:
 	def describe(self, jpegBytes, prompt, maxTokens, onText=None, cancel=None):
 		"""Send one image and prompt. Calls onText(delta) as text streams in.
 		Returns the full text, or None if cancelled."""
+		return self.chat(imageMessages(jpegBytes, prompt), maxTokens, onText, cancel)
+
+	def chat(self, messages, maxTokens, onText=None, cancel=None):
+		"""Like describe, but continues a conversation. Asking again with the same start
+		reuses the engine's work on the image, so follow-up questions answer quickly."""
 		if not self.running:
 			raise EngineError("The description engine is not running.")
-		b64 = base64.b64encode(jpegBytes).decode("ascii")
 		body = {
-			"messages": [{"role": "user", "content": [
-				{"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
-				{"type": "text", "text": prompt},
-			]}],
+			"messages": messages,
 			"max_tokens": maxTokens,
 			"temperature": 0,
 			"stream": True,
+			# Keep the engine's work on the image, so a follow-up question does not read it again.
+			"cache_prompt": True,
 		}
 		conn = http.client.HTTPConnection("127.0.0.1", self._port, timeout=300)
 		finished = threading.Event()

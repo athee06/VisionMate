@@ -11,12 +11,11 @@ import threading
 import addonHandler
 import api
 import gui
-import tones
 import ui
 import wx
 from logHandler import log
 
-from . import datapack, net
+from . import datapack, hardware, net, sounds
 
 addonHandler.initTranslation()
 
@@ -24,12 +23,18 @@ addonHandler.initTranslation()
 USAGE = _(
 	"How to use VisionMate:\n"
 	"NVDA+Alt+A: describe the current element.\n"
+	"NVDA+Alt+W: describe the current window.\n"
 	"NVDA+Alt+F: describe the whole screen.\n"
 	"NVDA+Alt+D: describe the image or image file on the clipboard.\n"
 	"Press a command once to hear a quick description. "
-	"Press it twice quickly to get a detailed description in a window you can read, copy and close.\n"
+	"Press it twice quickly to get a detailed description in a window you can read, copy and close, "
+	"and where you can ask questions about the image.\n"
+	"NVDA+Alt+O: open the overlay, which makes a window NVDA cannot read into a list of its texts and icons. "
+	"Press Enter on an item to click it, and Escape to close.\n"
 	"NVDA+Alt+G: turn automatic descriptions on or off. When on, images that have no label "
 	"are described as you read web pages and documents.\n"
+	"NVDA+Alt+B: turn button names on or off. When on, buttons that have no name are named from their icon.\n"
+	"NVDA+Alt+N: give your own name to the current button, or to the current item in the overlay.\n"
 	"Press Control to stop speaking.\n"
 	"VisionMate uses AI, and AI can make mistakes, so please double-check anything important.\n"
 	"Everything runs on your computer. Images are never sent to the internet."
@@ -67,6 +72,9 @@ class DataDialog(wx.Dialog):
 				"To work, VisionMate needs its vision data ({size} MB). It is downloaded only once. "
 				"Press Enter to download it now."
 			).format(size=sizeMb)
+			warnings = hardware.warnings()
+			if warnings:
+				intro += "\n\n" + "\n".join(warnings)
 
 		main = wx.BoxSizer(wx.VERTICAL)
 		self.text = wx.TextCtrl(self, value=intro, size=(520, 160), style=wx.TE_MULTILINE | wx.TE_READONLY)
@@ -195,15 +203,31 @@ class DataDialog(wx.Dialog):
 
 
 class ResultDialog(wx.Dialog):
-	"""Shows a description so it can be read line by line, copied and closed."""
+	"""Shows a description so it can be read line by line, copied and closed.
+	With onAsk, it also has a box for questions about the image: onAsk(question, dialog)."""
 
-	def __init__(self, parent, text):
+	def __init__(self, parent, text, onAsk=None):
 		# Translators: Title of the window showing a detailed description.
 		super().__init__(parent, title=_("VisionMate description"))
 		self._text = text
+		self._onAsk = onAsk
+		self.asking = False
 		main = wx.BoxSizer(wx.VERTICAL)
 		self.textCtrl = wx.TextCtrl(self, value=text, size=(600, 320), style=wx.TE_MULTILINE | wx.TE_READONLY)
 		main.Add(self.textCtrl, proportion=1, flag=wx.ALL | wx.EXPAND, border=10)
+		self.question = None
+		if onAsk is not None:
+			ask = wx.BoxSizer(wx.HORIZONTAL)
+			# Translators: Label of the box for questions about the described image.
+			ask.Add(wx.StaticText(self, label=_("&Question about this image:")), flag=wx.ALIGN_CENTER_VERTICAL)
+			self.question = wx.TextCtrl(self, size=(380, -1), style=wx.TE_PROCESS_ENTER)
+			ask.Add(self.question, proportion=1, flag=wx.LEFT, border=8)
+			# Translators: Button that asks the typed question about the image.
+			askBtn = wx.Button(self, label=_("As&k"))
+			ask.Add(askBtn, flag=wx.LEFT, border=8)
+			main.Add(ask, flag=wx.LEFT | wx.RIGHT | wx.EXPAND, border=10)
+			self.question.Bind(wx.EVT_TEXT_ENTER, lambda e: self.ask())
+			askBtn.Bind(wx.EVT_BUTTON, lambda e: self.ask())
 		buttons = wx.BoxSizer(wx.HORIZONTAL)
 		# Translators: Button that copies the description to the clipboard.
 		copyBtn = wx.Button(self, label=_("&Copy"))
@@ -220,6 +244,21 @@ class ResultDialog(wx.Dialog):
 		self.Bind(wx.EVT_CLOSE, lambda e: self.Destroy())
 		self.textCtrl.SetFocus()
 		self.textCtrl.SetInsertionPoint(0)
+
+	def ask(self):
+		question = self.question.GetValue().strip() if self.question else ""
+		if not question or self.asking or self._onAsk is None:
+			return
+		self.question.Clear()
+		self.asking = True
+		self._onAsk(question, self)
+
+	def addAnswer(self, question, answer):
+		"""Called on the GUI thread when an answer is complete."""
+		self.asking = False
+		if answer:
+			# Translators: A question and its answer, added to the description window.
+			self.appendText(_("\n\nQuestion: {question}\nAnswer: {answer}").format(question=question, answer=answer))
 
 	def appendText(self, text):
 		"""Add streamed text without moving the reading position."""
@@ -239,12 +278,13 @@ class StreamingResult:
 
 	_FIRST = re.compile(r"[.!?。！？]\s")
 
-	def __init__(self, onOpened):
+	def __init__(self, onOpened, onAsk=None):
 		self._text = ""
 		self._shown = 0
 		self._requested = False
 		self._dialog = None
 		self._onOpened = onOpened
+		self._onAsk = onAsk
 
 	def feed(self, delta):
 		self._text += delta
@@ -259,7 +299,7 @@ class StreamingResult:
 		wx.CallAfter(self._finish, finalText)
 
 	def _open(self):
-		self._dialog = ResultDialog(gui.mainFrame, _streamClean(self._text))
+		self._dialog = ResultDialog(gui.mainFrame, _streamClean(self._text), self._onAsk)
 		self._shown = len(self._text)
 		show(self._dialog)
 		self._onOpened()
@@ -274,8 +314,7 @@ class StreamingResult:
 			self._open()
 		if self._dialog:
 			self._dialog.setFinalText(finalText)
-			tones.beep(660, 40)
-			wx.CallLater(80, tones.beep, 880, 40)
+			sounds.play("done")
 
 
 def _streamClean(text):

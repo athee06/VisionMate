@@ -33,20 +33,30 @@ class VisionMatePanel(gui.settingsDialogs.SettingsPanel):
 		self.autoDescribe = checkbox(
 			# Translators: Checkbox in settings.
 			_("&Automatically describe images that have no label (NVDA+Alt+G)"), "autoDescribe")
+		self.readAhead = checkbox(
+			# Translators: Checkbox in settings.
+			_("Describe images further down the page in the bac&kground, so they are ready sooner"), "readAhead")
+		self.iconLabeler = checkbox(
+			# Translators: Checkbox in settings.
+			_("Name buttons that have no &name, from their icon (NVDA+Alt+B)"), "iconLabeler")
+		self.useOcr = checkbox(
+			# Translators: Checkbox in settings.
+			_("Use Windows &OCR to read screen text exactly"), "useOcr")
+		self.overlayLive = checkbox(
+			# Translators: Checkbox in settings.
+			_("Keep the o&verlay up to date as the window changes"), "overlayLive")
 		# Translators: Checkbox in settings.
 		self.useGpu = checkbox(_("Use the &graphics card (much faster)"), "useGpu")
 		self.preload = checkbox(
 			# Translators: Checkbox in settings.
-			_("&Get ready when NVDA starts (fastest first description, uses memory)"), "preload")
+			_("Get &ready when NVDA starts (fastest first description, uses memory)"), "preload")
+		self.liftCurtain = checkbox(
+			# Translators: Checkbox in settings.
+			_("When the screen curtain is on, briefly lift it to take a &picture"), "liftCurtain")
 		# Translators: Checkbox in settings.
 		self.answerInNvdaLanguage = checkbox(_("Answer in NVDA's &language"), "answerInNvdaLanguage")
 		# Translators: Checkbox in settings.
-		self.progressBeeps = checkbox(_("&Beep while waiting for a description"), "progressBeeps")
-		# Translators: Checkbox in settings.
-		self.autoUpdate = checkbox(_("Check for &updates automatically"), "autoUpdate")
-		# Translators: Button in settings.
-		checkBtn = helper.addItem(wx.Button(self, label=_("&Check for updates now")))
-		checkBtn.Bind(wx.EVT_BUTTON, lambda e: self.plugin and self.plugin.checkForUpdates(manual=True))
+		self.progressBeeps = checkbox(_("Play a soft &tick while waiting for a description"), "progressBeeps")
 
 	def onSave(self):
 		c = config.conf[CONF_SECTION]
@@ -54,10 +64,14 @@ class VisionMatePanel(gui.settingsDialogs.SettingsPanel):
 			self.plugin.setAutoDescribe(self.autoDescribe.GetValue())
 		else:
 			c["autoDescribe"] = self.autoDescribe.GetValue()
+		c["readAhead"] = self.readAhead.GetValue()
+		c["iconLabeler"] = self.iconLabeler.GetValue()
+		c["useOcr"] = self.useOcr.GetValue()
+		c["overlayLive"] = self.overlayLive.GetValue()
 		c["useGpu"] = self.useGpu.GetValue()
 		c["preload"] = self.preload.GetValue()
+		c["liftCurtain"] = self.liftCurtain.GetValue()
 		c["answerInNvdaLanguage"] = self.answerInNvdaLanguage.GetValue()
 		c["progressBeeps"] = self.progressBeeps.GetValue()
-		c["autoUpdate"] = self.autoUpdate.GetValue()
 		if self.plugin is not None:
 			self.plugin.onSettingsSaved()
