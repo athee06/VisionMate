@@ -50,9 +50,6 @@ class VisionMatePanel(gui.settingsDialogs.SettingsPanel):
 		self.preload = checkbox(
 			# Translators: Checkbox in settings.
 			_("Get &ready when NVDA starts (fastest first description, uses memory)"), "preload")
-		self.liftCurtain = checkbox(
-			# Translators: Checkbox in settings.
-			_("When the screen curtain is on, briefly lift it to take a &picture"), "liftCurtain")
 		# Translators: Checkbox in settings.
 		self.answerInNvdaLanguage = checkbox(_("Answer in NVDA's &language"), "answerInNvdaLanguage")
 		# Translators: Checkbox in settings.
@@ -70,7 +67,6 @@ class VisionMatePanel(gui.settingsDialogs.SettingsPanel):
 		c["overlayLive"] = self.overlayLive.GetValue()
 		c["useGpu"] = self.useGpu.GetValue()
 		c["preload"] = self.preload.GetValue()
-		c["liftCurtain"] = self.liftCurtain.GetValue()
 		c["answerInNvdaLanguage"] = self.answerInNvdaLanguage.GetValue()
 		c["progressBeeps"] = self.progressBeeps.GetValue()
 		if self.plugin is not None:

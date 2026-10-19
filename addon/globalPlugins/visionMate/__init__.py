@@ -125,7 +125,6 @@ confspec = {
 	"preload": "boolean(default=True)",
 	"answerInNvdaLanguage": "boolean(default=True)",
 	"progressBeeps": "boolean(default=True)",
-	"liftCurtain": "boolean(default=True)",
 	"useOcr": "boolean(default=True)",
 	"iconLabeler": "boolean(default=False)",
 	"readAhead": "boolean(default=True)",
@@ -314,6 +313,12 @@ class SentenceSpeaker:
 				text = self._prefix + text
 			self.spokeAnything = True
 			_speak(text)
+
+
+def _curtainBlockedMessage():
+	# Translators: Reported when the screen curtain is on and VisionMate cannot see through it.
+	return _("The screen curtain is on and VisionMate cannot see this. Please turn the screen curtain off "
+		"with NVDA+Control+Escape and try again.")
 
 
 class GlobalPlugin(globalPluginHandler.GlobalPlugin):
@@ -875,8 +880,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
 	def _readAhead(self, info, generation, context):
 		"""Describe images a little further down the page in the background, so they are instant when reached."""
-		if generation != self._autoGeneration or self._busy or scriptHandler.isScriptWaiting() or curtain.isOn():
-			return  # never flash the screen for background work
+		if generation != self._autoGeneration or self._busy or scriptHandler.isScriptWaiting():
+			return
 		try:
 			ahead = info.copy()
 			ahead.collapse(end=True)
@@ -891,8 +896,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 			loc = _safe(locate)
 			if not autodescribe.bigEnough(loc) or not window or not self._inside(loc, window):
 				continue
-			image = self._grab(_bbox(loc))
-			if autodescribe.isBlank(image):
+			image = self._grabOrReport(_bbox(loc), quiet=True)
+			if image is None or autodescribe.isBlank(image):
 				continue
 			key = hashlib.sha1(image.tobytes()).hexdigest()
 			if key in self._autoCache:
@@ -925,9 +930,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		loc = _safe(locate)
 		if not autodescribe.bigEnough(loc):
 			return
-		if curtain.isOn() and not conf()["liftCurtain"]:
-			return
-		image = self._grabOrReport(_bbox(loc))
+		image = self._grabOrReport(_bbox(loc), quiet=True)
 		if image is None or autodescribe.isBlank(image):
 			return
 		key = hashlib.sha1(image.tobytes()).hexdigest()
@@ -996,9 +999,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		loc = obj.location
 		if not loc or not (ICON_MIN_SIDE <= loc.width <= ICON_MAX_SIDE and ICON_MIN_SIDE <= loc.height <= ICON_MAX_SIDE):
 			return None
-		if curtain.isOn() and not conf()["liftCurtain"]:
-			return None
-		return self._grabOrReport(_bbox(loc))
+		return self._grabOrReport(_bbox(loc), quiet=True)
 
 	def _labelFocusedButton(self, obj, generation):
 		if generation != self._focusGeneration or scriptHandler.isScriptWaiting():
@@ -1106,15 +1107,10 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	# --- The overlay for inaccessible windows ---
 
 	def captureForOverlay(self, box):
-		if curtain.isOn() and not conf()["liftCurtain"]:
-			# Translators: Reported when the screen curtain stops the overlay from seeing the window.
-			raise RuntimeError(_("The screen curtain is on, so VisionMate cannot see the window."))
 		try:
 			return self._grab(box)
-		except curtain.CurtainError:
-			sounds.play("error")
-			ui.message(_("Warning: the screen curtain could not be turned back on. Your screen is visible."))
-			raise
+		except curtain.CurtainBlocked:
+			raise RuntimeError(_curtainBlockedMessage())
 
 	@script(
 		# Translators: Description of a command in the Input Gestures dialog.
@@ -1142,9 +1138,6 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 			return
 		fg = api.getForegroundObject()
 		loc = _windowBox(fg)
-		if curtain.isOn() and not conf()["liftCurtain"]:
-			self._grabOrReport()  # explains why
-			return
 		app = _safe(lambda: fg.appModule.appName) or "?"
 		recognizer = overlay.OverlayRecognizer(self, app, live=conf()["overlayLive"], underCurtain=curtain.isOn(),
 			title=_safe(lambda: fg.name) or "")
@@ -1262,26 +1255,20 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
 	@staticmethod
 	def _grab(bbox=None):
-		from PIL import ImageGrab
-		return curtain.captureUnderCurtain(lambda: ImageGrab.grab(bbox=bbox, all_screens=True))
+		return curtain.capture(bbox)
 
-	def _grabOrReport(self, bbox=None):
-		"""Take a picture of the screen. Returns None and tells the user if that is not possible."""
-		if curtain.isOn() and not conf()["liftCurtain"]:
-			# Translators: Reported when the screen curtain stops VisionMate from seeing the screen.
-			ui.message(_(
-				"The screen curtain is on, so VisionMate cannot see the screen. Turn it off, or allow VisionMate "
-				"to lift it briefly in VisionMate settings."
-			))
-			return None
+	def _grabOrReport(self, bbox=None, quiet=False):
+		"""Take a picture of the screen. Returns None, and unless quiet tells the user, if that is not possible."""
 		try:
 			return self._grab(bbox)
-		except curtain.CurtainError:
-			sounds.play("error")
-			# Translators: Reported when the screen curtain could not be turned back on after taking a picture.
-			ui.message(_("Warning: the screen curtain could not be turned back on. Your screen is visible."))
+		except curtain.CurtainBlocked:
+			if not quiet:
+				ui.message(_curtainBlockedMessage())
+			return None
 		except Exception:
 			log.error("VisionMate: could not capture the screen", exc_info=True)
+			if quiet:
+				return None
 			# Translators: Reported when the screen could not be captured.
 			ui.message(_("Could not take a picture of the screen."))
 		return None

@@ -36,8 +36,8 @@ If the download is interrupted, it continues from where it stopped.
 - **Automatic descriptions** (off by default): images without a label are described in one sentence as you read
   web pages and documents.
 - Screen text is read exactly with Windows OCR, and each event has its own short sound.
-- With NVDA's screen curtain on, VisionMate lifts it for a fraction of a second to take the picture.
-  You can turn this off in settings.
+- Works with NVDA's screen curtain on, without ever turning it off. If a window can't be seen that way
+  (some games and video players), VisionMate asks you to turn the screen curtain off.
 
 You can change the commands in NVDA's Input Gestures dialog, under VisionMate.
 
@@ -61,7 +61,7 @@ so it can sometimes get a name or kind wrong. NVDA+Alt+N lets you fix a name, an
 
 NVDA menu > Preferences > Settings > VisionMate: automatic descriptions, describing images further down the page
 in the background, names for buttons without a name, Windows OCR, keeping the overlay up to date, using the graphics
-card, getting ready when NVDA starts, lifting the screen curtain, answering in NVDA's language, and a soft tick while
+card, getting ready when NVDA starts, answering in NVDA's language, and a soft tick while
 waiting. VisionMate frees its memory by itself when your computer runs low.
 
 ## Requirements

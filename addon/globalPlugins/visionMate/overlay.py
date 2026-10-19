@@ -23,7 +23,7 @@ from . import imaging, labels, layout, ocr, sounds
 addonHandler.initTranslation()
 
 LIVE_INTERVAL_MS = 1000
-# With the screen curtain on, every refresh lifts the curtain, so refresh less often.
+# With the screen curtain on, each window is drawn on its own, which is slower, so refresh less often.
 CURTAIN_INTERVAL_MS = 3000
 # Words further apart than this many line heights are separate items, like buttons on one row.
 ITEM_GAP = 1.2
