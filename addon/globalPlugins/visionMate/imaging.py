@@ -52,6 +52,140 @@ def smartCrop(image):
 	return rgb.crop((left, top, right, bottom))
 
 
+# Finding a photo inside a chat message: the picture is cut into cells of this many pixels.
+PHOTO_CELL = 8
+# Screen backgrounds are one exact colour. A cell whose pixels differ from their average by at most this much is
+# flat. Photos always have some grain, even in blurry parts.
+PHOTO_FLAT = 0.5
+# Share of flat cells a photo may have; a chat bubble has more.
+PHOTO_MAX_FLAT = 0.02
+PHOTO_MIN_SIDE = 64
+PHOTO_MIN_AREA = 0.12
+# A photo fills most of its rectangle; scattered text does not.
+PHOTO_MIN_FILL = 0.6
+# The window, then the chat bubble, then the photo: each step looks inside the box found before.
+PHOTO_STEPS = 4
+
+
+def findPhoto(image):
+	"""Find the photo in a picture of a chat message, so the time, name and buttons around it are left out.
+	Returns a box (left, top, right, bottom) in image pixels, or None if no photo stands out."""
+	rgb = image.convert("RGB")
+	w, h = rgb.size
+	gw, gh = w // PHOTO_CELL, h // PHOTO_CELL
+	if gw * PHOTO_CELL < PHOTO_MIN_SIDE or gh * PHOTO_CELL < PHOTO_MIN_SIDE:
+		return None
+	rgb = rgb.crop((0, 0, gw * PHOTO_CELL, gh * PHOTO_CELL))
+	means = rgb.reduce(PHOTO_CELL)
+	spread = ImageChops.difference(rgb, means.resize(rgb.size, Image.NEAREST)).convert("L").reduce(PHOTO_CELL)
+	flat = bytes(1 if v <= PHOTO_FLAT else 0 for v in spread.tobytes())
+	box, found = (0, 0, gw, gh), None
+	for _ in range(PHOTO_STEPS):
+		inner = _photoInside(flat, gw, box, w * h)
+		if inner is None or inner == box:
+			break
+		box = inner
+		# A chat bubble around the photo still has flat parts, so look inside it. The photo has almost none.
+		x0, y0, x1, y1 = box
+		flatCells = sum(flat[y * gw + x] for y in range(y0 + 1, y1 - 1) for x in range(x0 + 1, x1 - 1))
+		if flatCells <= PHOTO_MAX_FLAT * (x1 - x0) * (y1 - y0):
+			found = box
+			break
+	if found is None:
+		return None
+	return tuple(v * PHOTO_CELL for v in found)
+
+
+def _photoInside(flat, gw, box, area):
+	"""The biggest solid block of grainy cells inside box, after flat background reached from its sides is taken
+	away. Boxes are in cells."""
+	bx0, by0, bx1, by1 = box
+	inBox = lambda x, y: bx0 <= x < bx1 and by0 <= y < by1
+	# The outermost cells may be an outline, so they are left out, and the search starts from flat cells near them.
+	reached = set()
+	stack = []
+	for y in range(by0, by1):
+		for x in range(bx0, bx1):
+			edge = min(x - bx0, bx1 - 1 - x, y - by0, by1 - 1 - y)
+			if edge == 0:
+				reached.add((x, y))
+			elif edge < 3 and flat[y * gw + x]:
+				reached.add((x, y))
+				stack.append((x, y))
+	while stack:
+		x, y = stack.pop()
+		for nx, ny in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
+			if inBox(nx, ny) and (nx, ny) not in reached and flat[ny * gw + nx]:
+				reached.add((nx, ny))
+				stack.append((nx, ny))
+	bw = bx1 - bx0
+	cells = bytes(
+		0 if (x, y) in reached else 1 for y in range(by0, by1) for x in range(bx0, bx1)
+	)
+	best = None
+	for region in _regions(cells, bw, by1 - by0):
+		x0, y0, x1, y1 = _trimRegion(cells, bw, region[:4])
+		n = sum(cells[y * bw + x] for y in range(y0, y1) for x in range(x0, x1))
+		pw, ph = (x1 - x0) * PHOTO_CELL, (y1 - y0) * PHOTO_CELL
+		if min(pw, ph) < PHOTO_MIN_SIDE or pw * ph < PHOTO_MIN_AREA * area:
+			continue
+		if n < PHOTO_MIN_FILL * (x1 - x0) * (y1 - y0):
+			continue
+		if best is None or n > best[4]:
+			best = (x0, y0, x1, y1, n)
+	if best is None:
+		return None
+	return (best[0] + bx0, best[1] + by0, best[2] + bx0, best[3] + by0)
+
+
+def _trimRegion(cells, gw, box):
+	"""Cut rows and columns off the sides of a box while they are mostly empty, like a name or time that touches
+	the photo."""
+	x0, y0, x1, y1 = box
+
+	def share(xs, ys):
+		total = len(xs) * len(ys)
+		return sum(cells[y * gw + x] for y in ys for x in xs) / total if total else 1
+
+	changed = True
+	while changed and x1 - x0 > 1 and y1 - y0 > 1:
+		changed = False
+		if share(range(x0, x1), (y0,)) < 0.5:
+			y0, changed = y0 + 1, True
+		if share(range(x0, x1), (y1 - 1,)) < 0.5:
+			y1, changed = y1 - 1, True
+		if share((x0,), range(y0, y1)) < 0.5:
+			x0, changed = x0 + 1, True
+		if share((x1 - 1,), range(y0, y1)) < 0.5:
+			x1, changed = x1 - 1, True
+	return x0, y0, x1, y1
+
+
+def _regions(cells, gw, gh):
+	"""Bounding boxes, in cells, of groups of side-by-side cells that are set, with their cell counts."""
+	seen = bytearray(len(cells))
+	boxes = []
+	for start in range(len(cells)):
+		if not cells[start] or seen[start]:
+			continue
+		seen[start] = 1
+		stack = [start]
+		x0 = x1 = start % gw
+		y0 = y1 = start // gw
+		n = 0
+		while stack:
+			i = stack.pop()
+			n += 1
+			x, y = i % gw, i // gw
+			x0, x1, y0, y1 = min(x0, x), max(x1, x), min(y0, y), max(y1, y)
+			for j in (i - gw if y else -1, i + gw if y + 1 < gh else -1, i - 1 if x else -1, i + 1 if x + 1 < gw else -1):
+				if j >= 0 and cells[j] and not seen[j]:
+					seen[j] = 1
+					stack.append(j)
+		boxes.append((x0, y0, x1 + 1, y1 + 1, n))
+	return boxes
+
+
 def _inkCells(image, textBoxes):
 	"""A grid of cells that contain sharp edges, with text areas blanked out."""
 	edges = image.convert("L").filter(ImageFilter.FIND_EDGES).point(lambda v: 255 if v > EDGE_THRESHOLD else 0)

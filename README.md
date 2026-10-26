@@ -2,8 +2,8 @@
 
 Fast, fully offline image descriptions and an accessible overlay for the [NVDA screen reader](https://www.nvaccess.org/).
 
-VisionMate describes the current element, the current window, the whole screen, or an image on the clipboard, on your
-own computer. For windows and games NVDA cannot read, its overlay turns the window into a list you can move through
+VisionMate describes the current element, the current window, the whole screen, an image on the clipboard, and photos
+in chat apps, image viewers and File Explorer, on your own computer. For windows and games NVDA cannot read, its overlay turns the window into a list you can move through
 and click. Images are never sent to the internet. No accounts, no API keys, no usage limits.
 
 ## Install
@@ -26,7 +26,7 @@ If the download is interrupted, it continues from where it stopped.
 | NVDA+Alt+F | Describe the whole screen |
 | NVDA+Alt+D | Describe the image, or copied image file, on the clipboard |
 | NVDA+Alt+O | Open or close the overlay for the current window |
-| NVDA+Alt+G | Turn automatic descriptions of unlabeled images on or off |
+| NVDA+Alt+G | Turn automatic descriptions of unlabeled images and photos on or off |
 | NVDA+Alt+B | Turn names for buttons that have no name on or off |
 | NVDA+Alt+N | Give your own name to the current button or overlay item |
 
@@ -40,6 +40,22 @@ If the download is interrupted, it continues from where it stopped.
   (some games and video players), VisionMate asks you to turn the screen curtain off.
 
 You can change the commands in NVDA's Input Gestures dialog, under VisionMate.
+
+## Photos in chats, image viewers and File Explorer
+
+Press NVDA+Alt+A on a photo message and VisionMate describes the photo itself, not the name and time around it.
+
+- **WinZapp (WhatsApp):** WinZapp never shows photos on screen. VisionMate gets each photo through WinZapp's
+  "Open image" button by itself and closes the viewer at once, so you stay on the message. The copy WinZapp writes
+  for the viewer is deleted straight away.
+- **Unigram (Telegram):** the full-size photo Unigram keeps on your computer is described, so small text is read clearly.
+- **Other chat apps** that show photos on screen: the photo is cut out of the message.
+- **Image viewers** such as Photos: NVDA+Alt+W describes the photo file at full quality.
+- **File Explorer and the desktop:** NVDA+Alt+A on an image file describes it without opening it.
+
+A described photo message says what its photo shows when you reach it again. With automatic descriptions on
+(NVDA+Alt+G), photo messages, image files and photos opened in a viewer are described when you stay on them.
+WinZapp stickers cannot be described yet, because WinZapp offers no way to open them.
 
 ## The overlay
 
@@ -96,7 +112,8 @@ so please double-check anything important.
 ## Privacy
 
 VisionMate does not collect any information about you or your use. It connects to the internet only to download
-its vision data. Add-on updates come through the NVDA Add-on Store.
+its vision data. Photos from chat apps are read on your computer and never copied or sent anywhere.
+Add-on updates come through the NVDA Add-on Store.
 
 ## Credits
 

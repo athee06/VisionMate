@@ -37,6 +37,24 @@ Questions must be about the image: VisionMate does not answer anything else, suc
 general knowledge, maths, writing or jokes. For such questions you hear
 "I can only answer questions about this image."</p>
 
+<h2>Photos in chats, image viewers and File Explorer</h2>
+<p>On a message with a photo, press <kbd>NVDA+Alt+A</kbd>. VisionMate describes the photo itself, not the name,
+time and buttons around it. Press twice for the detailed window, where you can ask about the photo.</p>
+<ul>
+<li>WinZapp (WhatsApp): WinZapp never shows photos on screen. VisionMate gets the photo from WinZapp's
+"Open image" button by itself, and closes the viewer WinZapp opens at once, so you stay on the message and only
+hear the description. The copy WinZapp writes for the viewer is deleted straight away.</li>
+<li>Unigram (Telegram): the full-size photo Unigram keeps on your computer is found and described, so small text
+is read clearly. If the photo is not downloaded yet, the preview on screen is described.</li>
+<li>Other chat apps that show photos on screen, such as WhatsApp or Telegram in a browser: the photo is cut out of the
+message and described.</li>
+<li>Image viewers, such as Photos: <kbd>NVDA+Alt+W</kbd> describes the photo file itself at full quality,
+whatever program opened it.</li>
+<li>File Explorer and the desktop: on an image file, <kbd>NVDA+Alt+A</kbd> describes the file without opening it.</li>
+</ul>
+<p>A photo message that was described says what its photo shows when you reach it again, like
+"Image: a dog on a sofa". Stickers in WinZapp cannot be described yet, because WinZapp offers no way to open them.</p>
+
 <h2>The overlay for inaccessible windows</h2>
 <p>Some programs and games show buttons and menus that NVDA cannot read. Press <kbd>NVDA+Alt+O</kbd> in such a
 window. VisionMate reads the window's text with Windows OCR, finds its icons, and shows everything as a list,
@@ -94,7 +112,8 @@ Decorative images are skipped: small icons, thin lines, blank images, and a pict
 on the page, such as a bullet or a rating star. Moving on stops the description, so reading is never slowed down.
 While you read, images a little further down the page are described in the background, so they are ready
 when you reach them. Images that get focus in programs, and pictures in Word documents and Outlook emails,
-are described too.
+are described too. So are photos: stay on a photo message in a chat app or an image file in File Explorer for a moment,
+or open a photo in an image viewer, and you hear what it shows.
 Turn it on or off with <kbd>NVDA+Alt+G</kbd> or in VisionMate settings. It is off by default.</p>
 <p>You can change these commands in NVDA's Input Gestures dialog, under VisionMate.</p>
 
@@ -112,7 +131,7 @@ Turn it on or off with <kbd>NVDA+Alt+G</kbd> or in VisionMate settings. It is of
 <h2>Settings</h2>
 <p>NVDA menu, Preferences, Settings, VisionMate:</p>
 <ul>
-<li>Automatically describe images that have no label.</li>
+<li>Automatically describe images without a label, photos in chats and photos in image viewers: off by default.</li>
 <li>Describe images further down the page in the background: on by default.</li>
 <li>Name buttons that have no name, from their icon: off by default.</li>
 <li>Use Windows OCR to read screen text exactly: on by default.</li>
@@ -143,7 +162,8 @@ VisionMate offers to download it after NVDA restarts.</p>
 
 <h2>Privacy</h2>
 <p>VisionMate does not collect any information about you or your use. It connects to the internet only to
-download its vision data.</p>
+download its vision data. Photos from chat apps are read on your computer and never copied or sent anywhere;
+only the descriptions of WinZapp photos are kept, as text, so a message can say what its photo shows.</p>
 
 <h2>Credits</h2>
 <p>Uses <a href="https://github.com/ggml-org/llama.cpp">llama.cpp</a> (MIT licence).

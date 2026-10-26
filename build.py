@@ -23,6 +23,8 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(ROOT, "addon")
 PLUGIN = os.path.join(SRC, "globalPlugins", "visionMate")
 DIST = os.path.join(ROOT, "dist")
+# Files in addon/ that only the build and tools use; the add-on itself never imports them.
+BUILD_ONLY = {os.path.join("globalPlugins", "visionMate", "release.py")}
 sys.path.insert(0, PLUGIN)
 import release  # noqa: E402
 
@@ -52,7 +54,10 @@ def main():
 			dirnames[:] = [d for d in dirnames if d != "__pycache__"]
 			for name in files:
 				full = os.path.join(dirpath, name)
-				z.write(full, os.path.relpath(full, SRC))
+				rel = os.path.relpath(full, SRC)
+				if rel in BUILD_ONLY or name.endswith(".pyc"):
+					continue
+				z.write(full, rel)
 	# releases/latest/download/VisionMate.nvda-addon then always downloads the newest version.
 	shutil.copyfile(out, os.path.join(DIST, "VisionMate.nvda-addon"))
 	print(f"Built {out} ({os.path.getsize(out) // 2**20} MB)")

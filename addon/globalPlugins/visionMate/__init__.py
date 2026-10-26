@@ -34,7 +34,7 @@ from logHandler import log
 from scriptHandler import script
 from speech import extensions as speechExtensions
 
-from . import autodescribe, curtain, datapack, dialogs, followup, hardware, imaging, labels, ocr, sounds
+from . import autodescribe, curtain, datapack, dialogs, explorer, followup, hardware, imaging, labels, localmedia, ocr, sounds, viewers, winzapp
 from .engine import Engine, EngineError, imageMessages, prepareImage
 
 addonHandler.initTranslation()
@@ -118,6 +118,23 @@ _ICON_ROLE_NAMES = (
 )
 ICON_ROLES = {getattr(controlTypes.Role, n) for n in _ICON_ROLE_NAMES if hasattr(controlTypes.Role, n)}
 AUTO_CACHE_SIZE = 300
+# Elements that can be a chat message holding a photo. Only the photo in them is described.
+_PHOTO_HOLDER_NAMES = ("LISTITEM", "GROUPING", "SECTION", "PARAGRAPH", "CELL", "TREEVIEWITEM")
+PHOTO_HOLDER_ROLES = {getattr(controlTypes.Role, n) for n in _PHOTO_HOLDER_NAMES if hasattr(controlTypes.Role, n)}
+# Some chat apps show a photo as a button that opens it, like Telegram's "Open file".
+PHOTO_BUTTON_ROLES = {getattr(controlTypes.Role, n) for n in ("BUTTON", "LINK") if hasattr(controlTypes.Role, n)}
+# How far into a message to look for its picture element.
+PHOTO_SEARCH_DEPTH = 4
+PHOTO_SEARCH_OBJECTS = 60
+# WinZapp photos: if the photo is not there after this long, say that it is being fetched.
+CHAT_PHOTO_WAIT_MS = 2000
+# Focus events of the hidden viewer, and of WinZapp getting the focus back, are ignored until this long after.
+CHAT_PHOTO_QUIET_SECONDS = 1.0
+CHAT_PHOTO_CONTEXT = [("app", "WinZapp"), ("shown", "a photo someone sent in a WhatsApp chat")]
+# Automatic descriptions wait until the user stays on a message this long, so moving through a chat stays quick.
+AUTO_FOCUS_DELAY_MS = 500
+# A viewer may show its title a moment before the photo is ready.
+VIEWER_DELAY_MS = 300
 
 confspec = {
 	"autoDescribe": "boolean(default=False)",
@@ -179,6 +196,14 @@ def _windowContext():
 		("app", _safe(lambda: fg.appModule.appName)),
 		("window title", _safe(lambda: fg.name)),
 	]
+
+
+def _isPhotoElement(obj, children):
+	"""A picture element, or a button or link with nothing written in it, like Telegram's photo, which opens the photo
+	when pressed. A file attachment is a button too, but has its name and size in it."""
+	if obj.role == controlTypes.Role.GRAPHIC:
+		return True
+	return obj.role in PHOTO_BUTTON_ROLES and not any(_safe(lambda c=c: (c.name or "").strip()) for c in children)
 
 
 def _iconName(text):
@@ -365,6 +390,18 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		# Until this time, the overlay follows a click into whatever window comes to the front.
 		self._overlayFollowUntil = 0
 		self._overlayDoc = None
+		# WinZapp photos: descriptions kept by message, the photo being fetched, and the last photo for a second press.
+		self.chatPhotos = winzapp.DescriptionStore(os.path.join(DATA_DIR, "winzapp.json"))
+		self._chatFetch = None
+		self._chatPhoto = None
+		# While a photo is fetched, the viewer WinZapp opens and WinZapp getting the focus back are not announced.
+		self._quietUntil = 0
+		self._quietFocus = None
+		self._quietTop = None
+		# The viewer photo last described automatically, so moving inside the viewer does not repeat it.
+		self._viewerShown = None
+		# Full-size photo searches; only the newest one is described.
+		self._originalRequest = 0
 		from .settings import VisionMatePanel
 		self._panelClass = VisionMatePanel
 		VisionMatePanel.plugin = self
@@ -494,7 +531,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
 	def _describe(self, image, mode, cacheKey=None, context=(), screen=False, onDone=None):
 		"""Describe a picture in the background. screen means it shows part of the screen, so OCR helps.
-		onDone(text) is called with the result of an icon description."""
+		onDone(text) is called with the result of an icon description, and onDone(text, mode) with any other."""
 		self._cancel.set()
 		# Background work gives way at once.
 		self._backgroundCancel.set()
@@ -626,6 +663,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 			window.finish(_clean_paragraphs(text))
 		else:
 			speaker.flush()
+		if onDone is not None and text and mode != ICON:
+			onDone(text, mode)
 
 	# --- Follow-up questions in the detailed window ---
 
@@ -971,8 +1010,18 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	def event_gainFocus(self, obj, nextHandler):
 		if self._overlayDoc is not None and self._holdOverlay(obj):
 			return  # NVDA stays in the overlay, which updates in place
+		if self._isQuiet(obj):
+			return
 		nextHandler()
 		self._focusGeneration += 1
+		try:
+			localmedia.warmUp(obj.appModule.appName)
+		except Exception:
+			pass  # objects can die at any time
+		try:
+			self._sayChatPhoto(obj)
+		except Exception:
+			log.debugWarning("VisionMate: WinZapp photo check failed", exc_info=True)
 		if not self._hasData:
 			return
 		try:
@@ -981,8 +1030,154 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 			# Never let this break NVDA's own focus handling.
 			log.debugWarning("VisionMate: focus check failed", exc_info=True)
 
+	def event_foreground(self, obj, nextHandler):
+		if self._isQuiet(obj):
+			return
+		nextHandler()
+
+	def _isQuiet(self, obj):
+		"""True for focus changes caused by fetching a WinZapp photo: the viewer it opens, which is hidden at once, and
+		WinZapp getting the focus back on the same message."""
+		if time.monotonic() > self._quietUntil:
+			return False
+		try:
+			app = (obj.appModule.appName or "").lower()
+			if app in winzapp.VIEWER_APPS:
+				return True
+			if winzapp.isWinZapp(app):
+				# The window coming back to the front, or the message the user is still on.
+				return obj.windowHandle == self._quietTop or (self._quietFocus is not None and obj == self._quietFocus)
+		except Exception:
+			log.debugWarning("VisionMate: quiet check failed", exc_info=True)
+		return False
+
+	# --- Photos in WinZapp ---
+
+	def _chatPhotoTarget(self, obj):
+		"""(WinZapp window, Open image button, message key) when obj is a selected photo message in WinZapp, else None."""
+		appModule = _safe(lambda: obj.appModule)
+		if appModule is None or not winzapp.isWinZapp(appModule.appName) or obj.role != controlTypes.Role.LISTITEM:
+			return None
+		if controlTypes.State.SELECTED not in obj.states:
+			return None  # the button belongs to the selected message
+		top = api.getForegroundObject().windowHandle
+		appDir = os.path.dirname(_safe(lambda: appModule.appPath) or "")
+		button = winzapp.openImageButton(top, winzapp.openImageNames(appDir))
+		if not button:
+			return None
+		return top, button, winzapp.messageKey(winzapp.chatName(obj.windowHandle), obj.name)
+
+	def _sayChatPhoto(self, obj):
+		"""On a WinZapp photo message that was described before, say what the photo shows."""
+		appName = _safe(lambda: obj.appModule.appName)
+		if not winzapp.isWinZapp(appName) or obj.role != controlTypes.Role.LISTITEM:
+			return
+		text = self.chatPhotos.get(winzapp.messageKey(winzapp.chatName(obj.windowHandle), obj.name))
+		if text:
+			# Translators: Spoken after a WinZapp photo message, before what its photo shows.
+			ui.message(_("Image: ") + text)
+
+	def _describeChatPhoto(self, obj):
+		"""NVDA+Alt+A on a photo message in WinZapp. Returns False if obj is not one."""
+		target = self._chatPhotoTarget(obj)
+		if target is None:
+			return False
+		key = target[2]
+		mode = self._pressMode()
+		fetch = self._chatFetch
+		if fetch is not None and fetch["key"] == key and fetch["image"] is None and not fetch["cancel"].is_set():
+			fetch["mode"] = mode  # a second press while the photo is still coming
+			return True
+		if mode == QUICK:
+			saved = self.chatPhotos.get(key)
+			if saved:
+				ui.message(saved)
+				return True
+		elif self._chatPhoto is not None and self._chatPhoto[0] == key:
+			self._describeChatPhotoNow(key, self._chatPhoto[1], mode)
+			return True
+		if not self._dataReady():
+			self.showDataDialog()
+			return True
+		self._startChatFetch(target, mode)
+		return True
+
+	def _startChatFetch(self, target, mode):
+		"""Get the photo of a WinZapp message in the background, then describe it."""
+		top, button, key = target
+		if self._chatFetch is not None:
+			self._chatFetch["cancel"].set()
+		focus = api.getFocusObject()
+		fetch = self._chatFetch = {"key": key, "mode": mode, "image": None, "cancel": threading.Event(), "focus": focus}
+		self._quietFocus = focus
+		self._quietTop = top
+		self._quietUntil = time.monotonic() + winzapp.FETCH_SECONDS + winzapp.VIEWER_SECONDS
+
+		def onPhoto(image):
+			fetch["image"] = image if image is not None else False
+			wx.CallAfter(self._chatPhotoReady, fetch)
+
+		def run():
+			try:
+				winzapp.fetchPhoto(top, button, fetch["cancel"], onPhoto)
+			except Exception:
+				log.error("VisionMate: could not get the photo from WinZapp", exc_info=True)
+				if fetch["image"] is None:
+					onPhoto(None)
+			finally:
+				if self._chatFetch is fetch:
+					self._quietUntil = time.monotonic() + CHAT_PHOTO_QUIET_SECONDS
+
+		def stillComing():
+			if fetch["image"] is None and not fetch["cancel"].is_set() and self._chatFetch is fetch:
+				# Translators: Spoken when a WinZapp photo takes a while, usually because it is being downloaded.
+				ui.message(_("Getting the photo"))
+
+		threading.Thread(target=run, name="visionMate-winzapp", daemon=True).start()
+		if mode != AUTO:
+			wx.CallLater(CHAT_PHOTO_WAIT_MS, stillComing)
+
+	def _chatPhotoReady(self, fetch):
+		if fetch["cancel"].is_set() or self._chatFetch is not fetch:
+			return
+		if fetch["image"] is False:
+			if fetch["mode"] != AUTO:
+				_sound("error")
+				# Translators: Reported when WinZapp did not give VisionMate the photo of a message.
+				ui.message(_("Could not get the photo from WinZapp."))
+			return
+		key, image = fetch["key"], fetch["image"]
+		self._chatPhoto = (key, image)
+		if fetch["mode"] == AUTO and api.getFocusObject() != fetch["focus"]:
+			# The user moved on: describe it quietly, so it is ready when they come back.
+			self._queueBackground(self._chatPhotoJob(key, image), ("chat", key))
+			return
+		self._describeChatPhotoNow(key, image, fetch["mode"])
+
+	def _chatPhotoJob(self, key, image):
+		prompt = _contextPrompt(CHAT_PHOTO_CONTEXT) + AUTO_PROMPT + HONESTY + _languageInstruction()
+
+		def run(cancel):
+			text = self._backgroundDescribe(image, prompt, 80, conf()["quickSize"], cancel)
+			if text is None:
+				return False
+			if text and not self.chatPhotos.get(key):
+				self.chatPhotos.set(key, " ".join(_clean(text).split()))
+			return True
+		return run
+
+	def _describeChatPhotoNow(self, key, image, mode):
+		def onDone(text, doneMode):
+			# The short description is the one said on the message; a detailed one is kept only if there is none.
+			if doneMode == QUICK or not self.chatPhotos.get(key):
+				self.chatPhotos.set(key, " ".join(_clean(text).split()))
+
+		self._describe(image, mode, context=CHAT_PHOTO_CONTEXT, onDone=onDone)
+
 	def _checkFocus(self, obj, generation):
 		c = conf()
+		if c["autoDescribe"] and self._autoPhoto(obj, generation):
+			return
 		if not (c["iconLabeler"] or c["autoDescribe"]) or not autodescribe.isUnlabeled(obj.name):
 			return
 		role = obj.role
@@ -993,6 +1188,160 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 			if ti is None or ti.passThrough:  # browse mode is handled while reading
 				wx.CallLater(150, self._autoCapture, lambda: obj.location, self._autoGeneration, None, None,
 					_windowContext())
+
+	# --- Automatic descriptions of photos: in messages of any app, and in image viewers ---
+
+	def _autoPhoto(self, obj, generation):
+		"""Describe a photo where the focus landed, once the user stays there for a moment. Returns True if obj is a
+		photo message or the focus is in an image viewer, so nothing else needs checking."""
+		if self._viewerName(api.getForegroundObject()):
+			wx.CallLater(VIEWER_DELAY_MS, self._autoViewer)
+			return True
+		if obj.role not in PHOTO_HOLDER_ROLES:
+			return False
+		if explorer.isExplorer(_safe(lambda: obj.appModule.appName)):
+			# Image files in File Explorer and on the desktop are described from the file, not the thumbnail.
+			wx.CallLater(AUTO_FOCUS_DELAY_MS, self._autoExplorerFile, obj, generation)
+			return True
+		target = self._chatPhotoTarget(obj)
+		if target is not None:
+			if not self.chatPhotos.get(target[2]):  # a described one was already said with the message
+				wx.CallLater(AUTO_FOCUS_DELAY_MS, self._autoChatPhoto, obj, target, generation)
+			return True
+		loc = obj.location
+		if winzapp.isWinZapp(_safe(lambda: obj.appModule.appName)) or not loc or loc.height < imaging.PHOTO_MIN_SIDE:
+			return False
+		wx.CallLater(AUTO_FOCUS_DELAY_MS, self._autoMessagePhoto, obj, generation)
+		return False
+
+	def _stillThere(self, generation):
+		return generation == self._focusGeneration and not scriptHandler.isScriptWaiting()
+
+	def _autoChatPhoto(self, obj, target, generation):
+		if self._stillThere(generation) and self._dataReady():
+			self._startChatFetch(target, AUTO)
+
+	def _autoMessagePhoto(self, obj, generation):
+		"""A message in a chat app that shows its photo on screen, like WhatsApp or Telegram."""
+		if not self._stillThere(generation) or not self._dataReady():
+			return
+		loc = _safe(lambda: obj.location)
+		if not loc or loc.width <= 0 or loc.height <= 0:
+			return
+		bbox = _bbox(loc)
+		image = self._grabOrReport(bbox, quiet=True)
+		if image is None:
+			return
+		photo = _safe(lambda: self._photoIn(obj, bbox, image))
+		if not photo:
+			return
+		image = image.crop(photo)
+		if autodescribe.isBlank(image):
+			return
+		key = hashlib.sha1(image.tobytes()).hexdigest()
+		cached = self._autoCache.get(key)
+		if cached:
+			self._autoCache.move_to_end(key)
+			ui.message(_("Image: ") + _clean(cached))
+			return
+		self._describeMessagePhoto(image, AUTO, _safe(lambda: obj.appModule.appName), cacheKey=key, generation=generation)
+
+	def _describeMessagePhoto(self, preview, mode, appName, cacheKey=None, generation=None):
+		"""Describe a photo cut from a chat message. If the app keeps the full-size photo as a file, like Unigram, that
+		is found in the background and described instead, so small text can be read. With a focus generation, it is
+		dropped if the user moved on meanwhile."""
+		context = _windowContext() + [("shown", "a photo someone sent in a chat")]
+		if not localmedia.folders(appName):
+			self._describe(preview, mode, cacheKey=cacheKey, context=context, screen=True)
+			return
+		self._originalRequest += 1
+		request = self._originalRequest
+
+		def describe(image):
+			# Only the newest request: a second press replaces the first.
+			if request != self._originalRequest or (generation is not None and not self._stillThere(generation)):
+				return
+			self._describe(image, mode, cacheKey=cacheKey, context=context, screen=True)
+
+		def find():
+			path = localmedia.findOriginal(preview, appName)
+			image = viewers.openImage(path) if path else None
+			wx.CallAfter(describe, image if image is not None else preview)
+
+		threading.Thread(target=find, name="visionMate-original", daemon=True).start()
+
+	@staticmethod
+	def _viewerName(fg):
+		"""The image file name in the title of the window in front, like "beach.jpg - Photos", or None."""
+		return viewers.imageName(_safe(lambda: fg.name))
+
+	def _describeViewerImage(self):
+		"""In an image viewer, describe the image file it shows at full quality. Returns False if not in one."""
+		if not self._viewerName(api.getForegroundObject()):
+			return False
+		found = viewers.imageInWindow(_safe(lambda: api.getForegroundObject().name))
+		# If the file was not found, the screen is described instead.
+		return bool(found) and self._describeFile(found[0], self._pressMode())
+
+	@staticmethod
+	def _fileKey(path):
+		try:
+			return f"file:{path}:{os.path.getmtime(path)}"
+		except OSError:
+			return None
+
+	def _describeFile(self, path, mode):
+		"""Describe an image file. Returns False if it cannot be read, like a format VisionMate does not know."""
+		key = self._fileKey(path)
+		if mode == AUTO:
+			cached = self._autoCache.get(key)
+			if cached:
+				self._autoCache.move_to_end(key)
+				ui.message(_("Image: ") + _clean(cached))
+				return True
+		image = viewers.openImage(path)
+		if image is None:
+			return False
+		self._describe(image, mode, cacheKey=key, context=[("file name", os.path.basename(path))])
+		return True
+
+	def _explorerImage(self, obj):
+		"""The image file an item in File Explorer or on the desktop stands for, or None."""
+		if not explorer.isExplorer(_safe(lambda: obj.appModule.appName)) or obj.role != controlTypes.Role.LISTITEM:
+			return None
+		fg = api.getForegroundObject()
+		onDesktop = _safe(lambda: fg.windowClassName) in ("Progman", "WorkerW")
+		return explorer.imageFile(_safe(lambda: fg.windowHandle), obj.name, onDesktop)
+
+	def _autoExplorerFile(self, obj, generation):
+		if not self._stillThere(generation) or not self._dataReady():
+			return
+		path = _safe(lambda: self._explorerImage(obj))
+		if path:
+			self._describeFile(path, AUTO)
+
+	def _autoViewer(self):
+		"""An image viewer is in front: describe its photo once."""
+		if not conf()["autoDescribe"] or not self._dataReady() or time.monotonic() < self._quietUntil:
+			return
+		found = viewers.imageInWindow(_safe(lambda: api.getForegroundObject().name))
+		if not found:
+			return
+		path = found[0]
+		key = self._fileKey(path)
+		if key is None or key == self._viewerShown:
+			return  # the focus moved inside the viewer; this photo was already said
+		self._viewerShown = key
+		self._describeFile(path, AUTO)
+
+	def event_nameChange(self, obj, nextHandler):
+		nextHandler()
+		# A viewer shows the next photo by changing its title.
+		try:
+			if conf()["autoDescribe"] and obj == api.getForegroundObject() and self._viewerName(obj):
+				wx.CallLater(VIEWER_DELAY_MS, self._autoViewer)
+		except Exception:
+			log.debugWarning("VisionMate: viewer title check failed", exc_info=True)
 
 	def _buttonImage(self, obj):
 		"""A picture of a small button, or None."""
@@ -1280,6 +1629,19 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	)
 	def script_describeElement(self, gesture):
 		obj = api.getNavigatorObject()
+		# WinZapp never shows photos on screen; its photo messages are described from the photo itself.
+		try:
+			if obj and self._describeChatPhoto(obj):
+				return
+		except Exception:
+			log.error("VisionMate: WinZapp photo failed", exc_info=True)
+		# In an image viewer, the photo itself is described, unless a button is chosen.
+		if obj and _safe(lambda: obj.role not in ICON_ROLES) and self._describeViewerImage():
+			return
+		# An image file in File Explorer or on the desktop: the file itself, without opening it.
+		path = obj and _safe(lambda: self._explorerImage(obj))
+		if path and self._describeFile(path, self._pressMode()):
+			return
 		loc = obj.location if obj else None
 		if not loc or loc.width <= 0 or loc.height <= 0:
 			# Translators: Reported when the current element has no position on screen.
@@ -1291,8 +1653,40 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 			("element name", _safe(lambda: obj.name)),
 		]
 		image = self._grabOrReport(bbox)
-		if image is not None:
-			self._describe(image, self._pressMode(), context=context, screen=True)
+		if image is None:
+			return
+		# A message with a photo, like in WhatsApp or Telegram: describe the photo, not the name and time around it.
+		photo = _safe(lambda: self._photoIn(obj, bbox, image))
+		if photo:
+			self._describeMessagePhoto(image.crop(photo), self._pressMode(), _safe(lambda: obj.appModule.appName))
+			return
+		self._describe(image, self._pressMode(), context=context, screen=True)
+
+	@staticmethod
+	def _photoIn(obj, bbox, image):
+		"""Where the photo is in a picture of a message, in image pixels, or None. The app's own picture element is
+		used if it has one; otherwise the photo is found in the pixels."""
+		if obj.role not in PHOTO_HOLDER_ROLES:
+			return None
+		best, seen, todo = None, 0, [(obj, 0)]
+		while todo and seen < PHOTO_SEARCH_OBJECTS:
+			current, depth = todo.pop(0)
+			seen += 1
+			children = current.children or ()
+			if current is not obj and _isPhotoElement(current, children):
+				loc = current.location
+				if loc and min(loc.width, loc.height) >= imaging.PHOTO_MIN_SIDE:
+					if best is None or loc.width * loc.height > best.width * best.height:
+						best = loc
+			if depth < PHOTO_SEARCH_DEPTH:
+				todo.extend((child, depth + 1) for child in children)
+		if best is not None:
+			left, top = max(best.left, bbox[0]) - bbox[0], max(best.top, bbox[1]) - bbox[1]
+			right = min(best.left + best.width, bbox[2]) - bbox[0]
+			bottom = min(best.top + best.height, bbox[3]) - bbox[1]
+			if right - left >= imaging.PHOTO_MIN_SIDE and bottom - top >= imaging.PHOTO_MIN_SIDE:
+				return (left, top, right, bottom)
+		return imaging.findPhoto(image)
 
 	@script(
 		# Translators: Description of a command in the Input Gestures dialog.
@@ -1300,6 +1694,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		gesture="kb:NVDA+alt+w",
 	)
 	def script_describeWindow(self, gesture):
+		if self._describeViewerImage():
+			return
 		image = self._grabOrReport(_bbox(_windowBox(api.getForegroundObject())))
 		if image is not None:
 			self._describe(image, self._pressMode(), context=_windowContext(), screen=True)

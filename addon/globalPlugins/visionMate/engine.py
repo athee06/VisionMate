@@ -12,6 +12,7 @@ import http.client
 import io
 import json
 import os
+import re
 import socket
 import subprocess
 import threading
@@ -116,6 +117,74 @@ def _freePort():
 	with socket.socket() as s:
 		s.bind(("127.0.0.1", 0))
 		return s.getsockname()[1]
+
+
+# The engine always picks the likeliest next word, which is fastest and most exact. A small model can then get
+# stuck saying one sentence again and again. The DRY setting makes it avoid repeating what it already said; reading
+# a receipt was as exact with it as without.
+ANTI_LOOP = {"dry_multiplier": 0.8, "dry_base": 1.75, "dry_allowed_length": 2, "dry_penalty_last_n": 512}
+
+
+class RepeatGuard:
+	"""Passes streamed text on, but leaves out sentences said before, and stops after a few: the model is stuck.
+	Text goes on at once unless it is the start of a sentence said before, so speech does not start later."""
+
+	_END = re.compile(r"[.!?。！？](?=\s)|\n")
+	# Short pieces like "- Price:" may rightly come again.
+	MIN_CHARS = 12
+	MAX_REPEATS = 3
+
+	def __init__(self, onText=None):
+		self._onText = onText
+		self._seen = set()
+		self._current = ""  # the sentence being written
+		self._sent = 0  # how much of it was passed on
+		self._repeats = 0
+		self._out = []
+
+	@staticmethod
+	def _key(text):
+		return " ".join(re.sub(r"[^\w\s]", "", text.lower()).split())
+
+	def _pass(self, text):
+		if text:
+			self._out.append(text)
+			if self._onText is not None:
+				self._onText(text)
+
+	def feed(self, delta):
+		"""Returns False once the model is repeating itself, so it should be stopped."""
+		self._current += delta
+		while True:
+			end = self._END.search(self._current)
+			if end is None:
+				break
+			sentence, self._current = self._current[:end.end()], self._current[end.end():]
+			sent, self._sent = self._sent, 0
+			key = self._key(sentence)
+			if not sent and len(key) >= self.MIN_CHARS and key in self._seen:
+				self._repeats += 1
+				if self._repeats >= self.MAX_REPEATS:
+					self._current, self._sent = "", 0  # what follows is more of the same
+					return False
+				continue
+			self._seen.add(key)
+			self._pass(sentence[sent:])
+		if len(self._current) > self._sent:
+			key = self._key(self._current)
+			# Held back only while it could still turn out to be a repeat.
+			if self._sent or not any(s.startswith(key) for s in self._seen if len(s) >= self.MIN_CHARS):
+				self._pass(self._current[self._sent:])
+				self._sent = len(self._current)
+		return True
+
+	def finish(self):
+		"""Everything passed on, with what is left of the last sentence unless it is a repeat."""
+		rest = self._current[self._sent:]
+		if rest and (self._sent or self._key(self._current) not in self._seen):
+			self._pass(rest)
+		self._current, self._sent = "", 0
+		return "".join(self._out)
 
 
 class Engine:
@@ -228,11 +297,12 @@ class Engine:
 			# Keep the engine's work on the image, so a follow-up question does not read it again.
 			"cache_prompt": True,
 		}
+		body.update(ANTI_LOOP)
+		guard = RepeatGuard(onText)
 		conn = http.client.HTTPConnection("127.0.0.1", self._port, timeout=300)
 		finished = threading.Event()
 		if cancel is not None:
 			threading.Thread(target=self._abortOnCancel, args=(conn, cancel, finished), daemon=True).start()
-		parts = []
 		try:
 			conn.request(
 				"POST", "/v1/chat/completions", body=json.dumps(body).encode("utf-8"),
@@ -251,10 +321,9 @@ class Engine:
 				if "error" in msg:
 					raise EngineError(str(msg["error"].get("message", msg["error"])))
 				delta = msg["choices"][0]["delta"].get("content")
-				if delta:
-					parts.append(delta)
-					if onText is not None:
-						onText(delta)
+				if delta and not guard.feed(delta):
+					log.debug("VisionMate: the description repeated itself; stopped")
+					break  # closing the connection below stops the engine
 		except (http.client.HTTPException, OSError) as e:
 			if cancel is not None and cancel.is_set():
 				return None
@@ -262,7 +331,7 @@ class Engine:
 		finally:
 			finished.set()
 			conn.close()
-		return "".join(parts).strip()
+		return guard.finish().strip()
 
 	@staticmethod
 	def _abortOnCancel(conn, cancel, finished):

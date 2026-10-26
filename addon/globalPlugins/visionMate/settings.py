@@ -32,7 +32,7 @@ class VisionMatePanel(gui.settingsDialogs.SettingsPanel):
 
 		self.autoDescribe = checkbox(
 			# Translators: Checkbox in settings.
-			_("&Automatically describe images that have no label (NVDA+Alt+G)"), "autoDescribe")
+			_("&Automatically describe images without a label, photos in chats and photos in image viewers (NVDA+Alt+G)"), "autoDescribe")
 		self.readAhead = checkbox(
 			# Translators: Checkbox in settings.
 			_("Describe images further down the page in the bac&kground, so they are ready sooner"), "readAhead")
