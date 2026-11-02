@@ -185,12 +185,23 @@ class DataDialog(wx.Dialog):
 		self.startBtn.SetLabel(_("&Try again"))
 		self.startBtn.Show()
 		self.closeBtn.SetLabel(_("&Close"))
-		# Translators: Shown when the download fails. {error} is the reason.
-		self._setText(_(
-			"The download did not finish: {error}\n\n"
-			"Check your internet connection and press Enter to try again. "
-			"The download continues from where it stopped."
-		).format(error=error))
+		if "CERTIFICATE_VERIFY_FAILED" in error:
+			# Translators: Shown when the download fails because the secure connection can't be checked.
+			self._setText(_(
+				"The download did not finish because Windows could not confirm the secure connection "
+				"to the download server.\n\n"
+				"This usually happens when the PC's date and time are wrong, when Windows Update hasn't run "
+				"for a while, or when antivirus or a company network checks secure connections. "
+				"Fix the date and time or run Windows Update, then press Enter to try again. "
+				"The download continues from where it stopped."
+			))
+		else:
+			# Translators: Shown when the download fails. {error} is the reason.
+			self._setText(_(
+				"The download did not finish: {error}\n\n"
+				"Check your internet connection and press Enter to try again. "
+				"The download continues from where it stopped."
+			).format(error=error))
 		self.Layout()
 
 	def _onClose(self, evt):
