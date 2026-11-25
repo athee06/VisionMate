@@ -48,6 +48,11 @@ def main():
 	with open(os.path.join(PLUGIN, "datainfo.json"), "w", encoding="utf-8") as f:
 		json.dump(dataInfo, f, indent=2)
 
+	# The help page NVDA shows is made from the user guide, so they never differ.
+	sys.path.insert(0, os.path.join(ROOT, "tools"))
+	import make_help
+	make_help.main()
+
 	out = os.path.join(DIST, f"VisionMate-{version}.nvda-addon")
 	with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
 		for dirpath, dirnames, files in os.walk(SRC):

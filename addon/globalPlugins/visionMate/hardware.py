@@ -8,6 +8,7 @@ import ctypes
 from ctypes import wintypes
 
 import addonHandler
+from logHandler import log
 
 addonHandler.initTranslation()
 
@@ -75,6 +76,7 @@ def warnings(memory=None, adapters=None):
 		memory = memoryGb() if memory is None else memory
 		adapters = graphicsAdapters() if adapters is None else adapters
 	except Exception:
+		log.debugWarning("VisionMate: could not check this computer's hardware", exc_info=True)
 		return []
 	found = []
 	if memory is not None and memory < MIN_MEMORY_GB - 0.5:

@@ -5,348 +5,23 @@
 # VisionMate - fast, fully offline image description for NVDA.
 # Images never leave the computer: a vision model runs locally through a bundled engine.
 
-import collections
-import contextlib
-import hashlib
-import json
-import logging
-import os
-import re
-import threading
-import time
-
 import addonHandler
-import api
-import config
-import controlTypes
 import globalPluginHandler
-import globalVars
-import gui
-import languageHandler
-import queueHandler
-import scriptHandler
-import speech
-import textInfos
-import ui
-import wx
-from controlTypes import OutputReason
-from logHandler import log
-from scriptHandler import script
-from speech import extensions as speechExtensions
 
-from . import autodescribe, curtain, datapack, dialogs, explorer, followup, hardware, imaging, labels, localmedia, ocr, sounds, viewers, winzapp
-from .engine import Engine, EngineError, imageMessages, prepareImage
-
-addonHandler.initTranslation()
-
-CONF_SECTION = "visionMate"
-PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
-ADDON_DIR = os.path.abspath(os.path.join(PLUGIN_DIR, "..", ".."))
-ENGINE_DIR = os.path.join(ADDON_DIR, "engine")
-# Kept outside the add-on folder so the data survives add-on updates.
-DATA_DIR = os.path.join(globalVars.appArgs.configPath, "visionMate")
-PACK_DIR = os.path.join(DATA_DIR, "data")
-IDLE_CHECK_SECONDS = 30
-# Freeing memory: when Windows has less than this left, VisionMate gives its memory back after a short pause.
-LOW_MEMORY_GB = 1.5
-LOW_MEMORY_IDLE_SECONDS = 60
-# Without "Get ready when NVDA starts", the memory is given back after this long unused.
-NO_PRELOAD_IDLE_SECONDS = 10 * 60
-# After freeing for low memory, VisionMate gets ready again once this much is free.
-RELOAD_MEMORY_GB = 6
-
-QUICK_PROMPT = (
-	"Describe this image for a blind person in 2-3 short sentences. "
-	"Say what it is, the main subjects, and read any important text."
-)
-DETAIL_PROMPT = (
-	"Describe this image in detail for a blind person. Start with what kind of image it is, "
-	"then describe the layout, people, objects, colours and actions. "
-	"Read all visible text exactly as written."
-)
-AUTO_PROMPT = (
-	"Describe this image in one short sentence for a blind person. "
-	"If it contains important text, read it."
-)
-# Added to every prompt: say what cannot be seen instead of guessing.
-HONESTY = (
-	" If text is too small or blurry to read, say so instead of guessing it. "
-	"Do not guess who a person is or how old they are."
-)
-# What NVDA knows about where the image is. Each part is cut to this length.
-CONTEXT_PART_CHARS = 100
-ICON_PROMPT = (
-	"This is an icon on a button. In 1 to 3 words, what does the button probably do? Answer with the words only."
-)
-# In the overlay the icon is shown as "<name> icon", so ask what it is rather than what it does.
-OVERLAY_ICON_PROMPT = (
-	"What is this icon? Answer with 1 to 3 words only, like Settings, Search, Firefox, Folder or Play."
-)
-# Several icons at once, in one numbered picture (imaging.iconSheet).
-ICON_SHEET_PROMPT = (
-	"This picture shows {count} numbered icons. For each number, say what the icon is in 1 to 3 words, "
-	"like Settings, Search, Back or Play. Answer one per line as: number: name"
-)
-ICON_SHEET_LINE = re.compile(r"^\s*(\d+)\s*[:.)-]\s*(.+)$", re.MULTILINE)
-SHEET_SIZE = 512
-# Follow-up questions must be about the image; see followup.py. Refused questions get no reply.
-NOT_IMAGE = followup.NOT_IMAGE
-# Questions and answers kept in a conversation, so it fits in the engine's memory.
-FOLLOWUP_HISTORY = 3
-# Screen pictures with less text than this are photos. They are sent a little smaller, which is faster.
-PHOTO_MAX_OCR_CHARS = 20
-PHOTO_SIZE_FACTOR = 0.875
-# A detailed description this soon after a quick one is a second press, and reuses its picture.
-REUSE_PICTURE_SECONDS = 2
-ICON_SIZE = 64
-# Larger buttons are not icon-only buttons.
-ICON_MAX_SIDE = 200
-ICON_MIN_SIDE = 8
-READ_AHEAD_LINES = 40
-READ_AHEAD_IMAGES = 3
-READ_AHEAD_DELAY_MS = 1000
-# Background work waits until the user has not asked for anything for this long. The engine cannot stop
-# halfway through reading a picture, so a request made meanwhile would wait 1 to 2 seconds for it.
-BACKGROUND_IDLE_SECONDS = 3
-# After a click in the overlay, wait this long for the window to react before reading it again.
-OVERLAY_REOPEN_MS = 700
-OVERLAY_FOLLOW_SECONDS = 3
-# Modes of a description.
-QUICK, DETAILED, AUTO, ICON = "quick", "detailed", "auto", "icon"
-_ICON_ROLE_NAMES = (
-	"BUTTON", "TOGGLEBUTTON", "MENUBUTTON", "DROPDOWNBUTTON", "SPLITBUTTON", "MENUITEM", "LINK", "TAB", "ICON",
-)
-ICON_ROLES = {getattr(controlTypes.Role, n) for n in _ICON_ROLE_NAMES if hasattr(controlTypes.Role, n)}
-AUTO_CACHE_SIZE = 300
-# Elements that can be a chat message holding a photo. Only the photo in them is described.
-_PHOTO_HOLDER_NAMES = ("LISTITEM", "GROUPING", "SECTION", "PARAGRAPH", "CELL", "TREEVIEWITEM")
-PHOTO_HOLDER_ROLES = {getattr(controlTypes.Role, n) for n in _PHOTO_HOLDER_NAMES if hasattr(controlTypes.Role, n)}
-# Some chat apps show a photo as a button that opens it, like Telegram's "Open file".
-PHOTO_BUTTON_ROLES = {getattr(controlTypes.Role, n) for n in ("BUTTON", "LINK") if hasattr(controlTypes.Role, n)}
-# How far into a message to look for its picture element.
-PHOTO_SEARCH_DEPTH = 4
-PHOTO_SEARCH_OBJECTS = 60
-# WinZapp photos: if the photo is not there after this long, say that it is being fetched.
-CHAT_PHOTO_WAIT_MS = 2000
-# Focus events of the hidden viewer, and of WinZapp getting the focus back, are ignored until this long after.
-CHAT_PHOTO_QUIET_SECONDS = 1.0
-CHAT_PHOTO_CONTEXT = [("app", "WinZapp"), ("shown", "a photo someone sent in a WhatsApp chat")]
-# Automatic descriptions wait until the user stays on a message this long, so moving through a chat stays quick.
-AUTO_FOCUS_DELAY_MS = 500
-# A viewer may show its title a moment before the photo is ready.
-VIEWER_DELAY_MS = 300
-
-confspec = {
-	"autoDescribe": "boolean(default=False)",
-	"useGpu": "boolean(default=True)",
-	"preload": "boolean(default=True)",
-	"answerInNvdaLanguage": "boolean(default=True)",
-	"progressBeeps": "boolean(default=True)",
-	"useOcr": "boolean(default=True)",
-	"iconLabeler": "boolean(default=False)",
-	"readAhead": "boolean(default=True)",
-	"overlayLive": "boolean(default=True)",
-	"quickSize": "integer(default=512, min=224, max=2048)",
-	"detailSize": "integer(default=768, min=224, max=2048)",
-}
-config.conf.spec[CONF_SECTION] = confspec
+from .common import *  # noqa: F401,F403
+from .background import BackgroundMixin
+from .autoimages import AutoImagesMixin
+from .photos import PhotosMixin
+from .overlayglue import OverlayMixin
+from .assist import AssistMixin
+from .actions import ActionsMixin
+from .pointermode import PointerMixin
+from .controller import ControllerMixin
 
 
-def conf():
-	return config.conf[CONF_SECTION]
-
-
-def _languageInstruction():
-	if not conf()["answerInNvdaLanguage"]:
-		return ""
-	lang = languageHandler.getLanguage().split("_")[0]
-	if lang == "en":
-		return ""
-	name = languageHandler.getLanguageDescription(lang) or lang
-	return f" Answer in {name}."
-
-
-def _contextPrompt(parts):
-	"""Turn what NVDA knows, like [("app", "chrome")], into a prompt prefix that helps the model understand the image."""
-	cleaned = []
-	for label, value in parts:
-		value = " ".join(str(value or "").split())
-		if value:
-			if len(value) > CONTEXT_PART_CHARS:
-				value = value[:CONTEXT_PART_CHARS].rsplit(" ", 1)[0] + "..."
-			cleaned.append(f"{label}: {value}")
-	if not cleaned:
-		return ""
-	return (
-		"Context from the screen reader, only to help you understand the image. Do not read it out: "
-		+ "; ".join(cleaned) + ".\n"
-	)
-
-
-def _safe(fn):
-	try:
-		return fn()
-	except Exception:  # objects can die or raise COM errors at any time
-		return None
-
-
-def _windowContext():
-	fg = _safe(api.getForegroundObject)
-	return [
-		("app", _safe(lambda: fg.appModule.appName)),
-		("window title", _safe(lambda: fg.name)),
-	]
-
-
-def _isPhotoElement(obj, children):
-	"""A picture element, or a button or link with nothing written in it, like Telegram's photo, which opens the photo
-	when pressed. A file attachment is a button too, but has its name and size in it."""
-	if obj.role == controlTypes.Role.GRAPHIC:
-		return True
-	return obj.role in PHOTO_BUTTON_ROLES and not any(_safe(lambda c=c: (c.name or "").strip()) for c in children)
-
-
-def _iconName(text):
-	"""Clean a guessed icon name: one short line, no quotes or full stop."""
-	text = _clean(text.splitlines()[0] if text else "").strip(" .:;\"'")
-	if text.lower().endswith(" icon"):
-		text = text[:-5]
-	words = text.split()[:4]
-	text = " ".join(words)
-	return text[:1].upper() + text[1:] if text else ""
-
-
-def _sheetNames(text, count):
-	"""{number: name} from an answer like "1: Back" on each line. The first answer for a number counts."""
-	names = {}
-	for m in ICON_SHEET_LINE.finditer(text or ""):
-		number = int(m.group(1))
-		if 1 <= number <= count and number not in names:
-			names[number] = m.group(2)
-	return names
-
-
-def _bbox(loc):
-	return (loc.left, loc.top, loc.left + loc.width, loc.top + loc.height)
-
-
-_Box = collections.namedtuple("_Box", "left top width height")
-
-
-def _windowBox(fg):
-	"""Where the foreground window is on screen. Some windows, like the desktop, full-screen apps and games, do not
-	tell NVDA; then Windows is asked for the window's rectangle, and if that fails too, the whole screen is used.
-	The result is kept inside the screen, so a window partly off screen still works."""
-	import ctypes
-	from ctypes import wintypes
-	user32 = ctypes.windll.user32
-	# The whole screen, over all monitors.
-	sx, sy = user32.GetSystemMetrics(76), user32.GetSystemMetrics(77)
-	sw, sh = user32.GetSystemMetrics(78), user32.GetSystemMetrics(79)
-	box = None
-	loc = _safe(lambda: fg.location)
-	if loc and loc.width > 0 and loc.height > 0:
-		box = (loc.left, loc.top, loc.left + loc.width, loc.top + loc.height)
-	else:
-		handle = _safe(lambda: fg.windowHandle) or user32.GetForegroundWindow()
-		rect = wintypes.RECT()
-		if handle and user32.GetWindowRect(handle, ctypes.byref(rect)) and rect.right > rect.left and rect.bottom > rect.top:
-			box = (rect.left, rect.top, rect.right, rect.bottom)
-	if box is not None:
-		left, top = max(box[0], sx), max(box[1], sy)
-		right, bottom = min(box[2], sx + sw), min(box[3], sy + sh)
-		if right - left >= 16 and bottom - top >= 16:
-			return _Box(left, top, right - left, bottom - top)
-	return _Box(sx, sy, sw, sh)
-
-
-def _speak(text):
-	queueHandler.queueFunction(queueHandler.eventQueue, ui.message, text)
-
-
-def _sound(name):
-	queueHandler.queueFunction(queueHandler.eventQueue, sounds.play, name)
-
-
-def _bundledDataInfo():
-	"""Download details of the vision data this add-on version was built with (written by build.py)."""
-	try:
-		with open(os.path.join(PLUGIN_DIR, "datainfo.json"), encoding="utf-8") as f:
-			return json.load(f)
-	except (OSError, ValueError):
-		return None
-
-
-_MARKDOWN = re.compile(r"\*\*|__|^#+\s*|`", re.MULTILINE)
-
-
-def _clean(text):
-	return " ".join(_MARKDOWN.sub("", text).split()).strip(" -")
-
-
-class SentenceSpeaker:
-	"""Speaks streamed text one sentence at a time, so speech starts before the model finishes."""
-
-	_END = re.compile(r"(\S*)[.!?。！？](?=\s)|\n")
-	# Shorter pieces are joined with the next one, so list labels like "Phone number:" are not spoken alone.
-	_MIN_CHARS = 30
-	# A long first sentence is started at a comma once it is this long, so speech begins sooner.
-	_FIRST_CLAUSE_CHARS = 60
-	_CLAUSE = re.compile(r",(?=\s)")
-
-	def __init__(self, cancel, prefix=""):
-		self._cancel = cancel
-		self._buf = ""
-		self._prefix = prefix
-		self.spokeAnything = False
-
-	def feed(self, delta):
-		self._buf += delta
-		pos = 0
-		while True:
-			m = self._END.search(self._buf, pos)
-			if not m:
-				self._sayFirstClause()
-				return
-			pos = m.end()
-			word = m.group(1) or ""
-			# "R." "Nr." "Tel." are abbreviations or initials, not sentence ends.
-			if 0 < len(word) <= 3 and word[0].isupper():
-				continue
-			if len(self._buf[:pos].strip()) < self._MIN_CHARS:
-				continue
-			self._say(self._buf[:pos])
-			self._buf = self._buf[pos:]
-			pos = 0
-
-	def _sayFirstClause(self):
-		if self.spokeAnything or len(self._buf) < self._FIRST_CLAUSE_CHARS:
-			return
-		commas = [m.end() for m in self._CLAUSE.finditer(self._buf) if m.end() >= self._MIN_CHARS]
-		if commas:
-			self._say(self._buf[:commas[-1]])
-			self._buf = self._buf[commas[-1]:]
-
-	def flush(self):
-		self._say(self._buf)
-		self._buf = ""
-
-	def _say(self, text):
-		text = _clean(text)
-		if text and not self._cancel.is_set():
-			if not self.spokeAnything:
-				text = self._prefix + text
-			self.spokeAnything = True
-			_speak(text)
-
-
-def _curtainBlockedMessage():
-	# Translators: Reported when the screen curtain is on and VisionMate cannot see through it.
-	return _("The screen curtain is on and VisionMate cannot see this. Please turn the screen curtain off "
-		"with NVDA+Control+Escape and try again.")
-
-
-class GlobalPlugin(globalPluginHandler.GlobalPlugin):
+# The parts live in their own modules; scripts (key commands) stay here so NVDA binds their gestures.
+class GlobalPlugin(BackgroundMixin, AutoImagesMixin, PhotosMixin, OverlayMixin, AssistMixin,
+		ActionsMixin, PointerMixin, ControllerMixin, globalPluginHandler.GlobalPlugin):
 	scriptCategory = _("VisionMate")
 
 	def __init__(self):
@@ -358,6 +33,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		self._cancel = threading.Event()
 		self._speakingCancel = None
 		self._gpuFailed = False
+		# Failed requests on the graphics card in a row; at GPU_FAILURES_BEFORE_CPU the processor is used.
+		self._gpuFailures = 0
 		self._dataDialog = None
 		self._hasData = datapack.installedVersion(PACK_DIR) > 0
 		self._autoCache = collections.OrderedDict()
@@ -370,6 +47,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		self._stopped = threading.Event()
 		# True after the memory was given back because Windows ran low.
 		self._freedForMemory = False
+		total = hardware.memoryGb()
+		self._smallMemory = total is not None and total <= SMALL_MEMORY_GB
 		self.labels = labels.LabelStore(os.path.join(DATA_DIR, "labels.json"))
 		self._focusGeneration = 0
 		# Background work: naming icons for the overlay and describing images ahead of the reader.
@@ -390,6 +69,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		# Until this time, the overlay follows a click into whatever window comes to the front.
 		self._overlayFollowUntil = 0
 		self._overlayDoc = None
+		self._lastFind = None
 		# WinZapp photos: descriptions kept by message, the photo being fetched, and the last photo for a second press.
 		self.chatPhotos = winzapp.DescriptionStore(os.path.join(DATA_DIR, "winzapp.json"))
 		self._chatFetch = None
@@ -402,6 +82,9 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		self._viewerShown = None
 		# Full-size photo searches; only the newest one is described.
 		self._originalRequest = 0
+		self._initAssist()
+		self._initActions()
+		self._initPointer()
 		from .settings import VisionMatePanel
 		self._panelClass = VisionMatePanel
 		VisionMatePanel.plugin = self
@@ -413,18 +96,31 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		if self._dataReady():
 			if conf()["preload"]:
 				self._startEngineInBackground()
+			else:
+				wx.CallLater(EARLY_LOAD_DELAY_MS, self._earlyLoad)
 			# Add-on updates come from the Add-on Store; one that needs newer vision data offers it here.
 			bundled = _bundledDataInfo()
 			if bundled and bundled.get("version", 0) > datapack.installedVersion(PACK_DIR):
 				wx.CallLater(3000, self.showDataDialog, bundled, True)
 		else:
 			wx.CallLater(3000, self.showDataDialog)
+		threading.Thread(target=_cleanLeftovers, args=([DATA_DIR, PACK_DIR],), name="visionMate-cleanup",
+			daemon=True).start()
 		threading.Thread(target=self._unloadWhenIdle, name="visionMate-idle", daemon=True).start()
 		threading.Thread(target=self._backgroundLoop, name="visionMate-background", daemon=True).start()
+		self._initController()
 
 	def terminate(self):
 		self._stopped.set()
 		self._cancel.set()
+		self._actionCancel.set()
+		self._inputMode = None
+		self._controllerMode = False
+		self._restoreMouseTracking()
+		if self._holding:
+			from . import inputs
+			inputs.release()
+			self._holding = False
 		self._backgroundCancel.set()
 		self._backgroundWake.set()
 		self.labels.save()
@@ -456,6 +152,19 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 			self._gpuFailed = True
 			self._engine.ensure(core, vision, False)
 
+	def _engineFailed(self):
+		"""The engine stopped or failed during a request (graphics driver reset, out of memory). The next
+		request starts it again; after the graphics card fails twice in a row, the processor is used instead."""
+		usedGpu = self._engine.usingGpu
+		crashed = not self._engine.running
+		log.warning(f"VisionMate: engine failed during a request (stopped: {crashed}, GPU: {usedGpu})", exc_info=True)
+		self._engine.stop()
+		if usedGpu:
+			self._gpuFailures += 1
+			if self._gpuFailures >= GPU_FAILURES_BEFORE_CPU:
+				log.warning("VisionMate: the graphics card failed twice; using the processor from now on")
+				self._gpuFailed = True
+
 	def _startEngineInBackground(self):
 		def run():
 			try:
@@ -465,6 +174,19 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
 		threading.Thread(target=run, name="visionMate-preload", daemon=True).start()
 
+	def _earlyLoad(self):
+		"""Without "Get ready", load the engine anyway a little after NVDA starts on PCs with memory to spare, so the
+		first description is fast. Like any unused engine without "Get ready", it is freed after 10 idle minutes."""
+		if self._stopped.is_set() or conf()["preload"] or not self._dataReady() or self._busy or self._engine.running:
+			return
+		total, free = hardware.memoryGb(), hardware.freeMemoryGb()
+		if total is None or free is None or total < EARLY_LOAD_TOTAL_GB or free < RELOAD_MEMORY_GB:
+			log.debug(f"VisionMate: not loading early (memory {total} GB, free {free} GB)")
+			return
+		log.debug("VisionMate: loading early so the first description is fast")
+		self._lastUse = time.monotonic()
+		self._startEngineInBackground()
+
 	def _unloadWhenIdle(self):
 		"""Gives the memory back when Windows runs low, or after a while unused if the user did not ask
 		VisionMate to stay ready. Gets ready again once memory is free, if it should stay ready."""
@@ -472,6 +194,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 			try:
 				free = hardware.freeMemoryGb()
 			except Exception:
+				log.debugWarning("VisionMate: could not read free memory", exc_info=True)
 				free = None
 			with self._useLock:
 				if self._busy:
@@ -490,6 +213,10 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 					self._engine.stop()
 				elif not conf()["preload"] and idle >= NO_PRELOAD_IDLE_SECONDS:
 					log.debug("VisionMate: freeing memory after 10 idle minutes")
+					self._engine.stop()
+				elif self._smallMemory and idle >= SMALL_MEMORY_IDLE_SECONDS:
+					# Even with "Get ready", PCs with 16 GB or less get the memory back after a long idle time.
+					log.debug("VisionMate: freeing memory after 30 idle minutes on a PC with little memory")
 					self._engine.stop()
 
 	def onSettingsSaved(self):
@@ -519,7 +246,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 			# Translators: Reported when the add-on was built without download details.
 			ui.message(_("VisionMate cannot find its vision data download. Please reinstall the add-on."))
 			return
-		self._dataDialog = dialogs.DataDialog(gui.mainFrame, info, PACK_DIR, self._onDataInstalled, isUpdate)
+		self._dataDialog = dialogs.DataDialog(gui.mainFrame, info, PACK_DIR, self._onDataInstalled, isUpdate,
+			installPortable=self.installPortable)
 		dialogs.show(self._dataDialog)
 
 	# --- Describing ---
@@ -529,9 +257,10 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		if self._speakingCancel is not None:
 			self._speakingCancel.set()
 
-	def _describe(self, image, mode, cacheKey=None, context=(), screen=False, onDone=None):
+	def _describe(self, image, mode, cacheKey=None, context=(), screen=False, onDone=None, what=None):
 		"""Describe a picture in the background. screen means it shows part of the screen, so OCR helps.
-		onDone(text) is called with the result of an icon description, and onDone(text, mode) with any other."""
+		onDone(text) is called with the result of an icon description, and onDone(text, mode) with any other.
+		what says what is described, for NVDA+Alt+P, like "describing the screen"."""
 		self._cancel.set()
 		# Background work gives way at once.
 		self._backgroundCancel.set()
@@ -544,6 +273,12 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		# Pressing twice: use the first press's picture, so the engine's work on it is reused even if the screen
 		# changed a little, like a blinking cursor.
 		if mode == QUICK:
+			# Pressing again soon on a picture that did not really change sends the same picture, so the engine's
+			# work on it is reused: speech starts in about 0.4 s instead of 2.
+			last = self._lastQuick
+			if (last and now - last[0] < REUSE_SIMILAR_SECONDS and last[2] == screen
+					and imaging.nearlySame(last[1], image)):
+				image = last[1]
 			self._lastQuick = (now, image, screen)
 		elif mode == DETAILED and self._lastQuick and now - self._lastQuick[0] < REUSE_PICTURE_SECONDS:
 			image, screen = self._lastQuick[1], self._lastQuick[2]
@@ -551,6 +286,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 			self._lastQuick = None
 		if mode not in (AUTO, ICON):
 			sounds.play("detailed" if mode == DETAILED else "quick")
+			# Translators: What VisionMate is doing, said by NVDA+Alt+P, when nothing more exact is known.
+			self._startTask(what or _("describing a picture"), cancel)
 		threading.Thread(
 			target=self._worker, args=(image, mode, cancel, cacheKey, context, screen, onDone),
 			name="visionMate-describe", daemon=True,
@@ -574,6 +311,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 				self._describeNow(image, mode, cancel, cacheKey, context, screen, onDone)
 		finally:
 			self._lastRequest = time.monotonic()
+			self._endTask(cancel)
 
 	def _describeNow(self, image, mode, cancel, cacheKey, context, screen=False, onDone=None):
 		c = conf()
@@ -586,35 +324,48 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		if mode in (QUICK, DETAILED):
 			image = imaging.smartCrop(image)
 			if screen and c["useOcr"]:
+				self._taskStage(cancel, "text")
 				lines = ocr.recognize(image)
 				if cancel.is_set():
 					return
 				textPart = ocr.promptPart(lines)
 				if len(ocr.linesText(lines).strip()) < PHOTO_MAX_OCR_CHARS:
 					size = int(size * PHOTO_SIZE_FACTOR)
+		ins = self.instructions
 		if mode == ICON:
 			size = ICON_SIZE
-			prompt = _contextPrompt(context) + ICON_PROMPT + _languageInstruction()
+			prompt = _contextPrompt(context) + ins.get("icon", ICON_PROMPT) + _languageInstruction()
 		else:
+			asked = mode in (QUICK, DETAILED)
 			prompt = (
-				_contextPrompt(context) + textPart
-				+ {QUICK: QUICK_PROMPT, DETAILED: DETAIL_PROMPT, AUTO: AUTO_PROMPT}[mode]
-				+ HONESTY + _languageInstruction()
+				_contextPrompt(context) + (self._userPromptPart() if asked else "") + textPart
+				+ {QUICK: ins.get("quick", QUICK_PROMPT), DETAILED: ins.get("detailed", DETAIL_PROMPT),
+					AUTO: ins.get("auto", AUTO_PROMPT)}[mode]
+				+ " " + ins.get("honesty", HONESTY.strip()) + (ins.own() if asked else "") + _languageInstruction()
 			)
 		maxTokens = {QUICK: 200, DETAILED: 600, AUTO: 80, ICON: 8}[mode]
 		# Beep until speech starts, or until the detailed description window opens.
 		# Automatic descriptions stay quiet so reading is not cluttered.
 		stopBeeps = threading.Event()
-		if c["progressBeeps"] and not quiet:
-			threading.Thread(target=self._progressBeeps, args=(cancel, stopBeeps), daemon=True).start()
+		if not quiet:
+			threading.Thread(target=self._progressBeeps, args=(cancel, stopBeeps, c["progressBeeps"]),
+				daemon=True).start()
 		# Translators: Spoken before an automatic description of an image without a label.
-		speaker = None if detailed or mode == ICON else SentenceSpeaker(cancel, prefix=_("Image: ") if mode == AUTO else "")
-		conversation = {"start": None, "history": []}
+		prefix = {AUTO: _("Image: ")}.get(mode, "")
+		speaker = None if detailed or mode == ICON else SentenceSpeaker(cancel, prefix=prefix)
+		conversation = {"start": None, "history": [], "image": image}
+		# Translators: Button in the description window that reads all the text in the image with Windows OCR.
+		readText = (_("Read all &text"), lambda dialog: self._readAllText(image, dialog))
 		window = dialogs.StreamingResult(
-			onOpened=stopBeeps.set, onAsk=lambda question, dialog: self._askFollowUp(conversation, question, dialog),
+			onOpened=stopBeeps.set,
+			onAsk=lambda question, dialog, trusted=False: self._askFollowUp(conversation, question, dialog, trusted),
+			actions=[readText],
 		) if detailed else None
 
+		self._taskStage(cancel, "looking")
+
 		def onText(delta):
+			self._taskStage(cancel, "speaking")
 			if speaker is not None:
 				stopBeeps.set()
 				speaker.feed(delta)
@@ -629,13 +380,17 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 				try:
 					self._ensureEngine()
 					text = self._engine.describe(jpeg, prompt, maxTokens, onText, cancel)
+					self._gpuFailures = 0
 					break
 				except EngineError:
-					# The GPU can fail mid-request (e.g. driver reset). Retry once on the processor.
-					if attempt or (speaker and speaker.spokeAnything) or not self._engine.usingGpu:
+					# Only a stopped engine, or a failure on the graphics card, is worth a restart.
+					if (attempt or cancel.is_set() or (speaker and speaker.spokeAnything)
+							or (self._engine.running and not self._engine.usingGpu)):
 						raise
-					log.warning("VisionMate: GPU request failed, retrying on CPU", exc_info=True)
-					self._gpuFailed = True
+					self._engineFailed()
+					if not quiet:
+						# Translators: Reported when the description engine stopped and was started again.
+						_speak(_("VisionMate restarted"))
 		except EngineError as e:
 			log.error("VisionMate: description failed", exc_info=True)
 			if not cancel.is_set() and not quiet:
@@ -668,9 +423,31 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
 	# --- Follow-up questions in the detailed window ---
 
-	def _askFollowUp(self, conversation, question, dialog):
+	def _readAllText(self, image, dialog):
+		"""Read every bit of text in the picture with Windows OCR, exactly as written, into the window."""
 		sounds.play("send")
-		if followup.clearlyOffTopic(question):
+
+		def run():
+			lines = ocr.recognize(image)
+			text = ocr.rowsText(lines).strip() if lines else ""
+			if lines is None:
+				# Translators: Reported when Windows OCR can't run, for example when no OCR language is installed.
+				text = _("Windows OCR is not available.")
+			elif not text:
+				# Translators: Reported when the image has no text.
+				text = _("No text found.")
+			_sound("receive")
+			_speak(text.splitlines()[0])
+			# Translators: Title above the text read from the image.
+			wx.CallAfter(dialog.addSection, _("Text in the image:"), text)
+
+		threading.Thread(target=run, name="visionMate-ocr", daemon=True).start()
+
+	def _askFollowUp(self, conversation, question, dialog, trusted=False):
+		sounds.play("send")
+		if not trusted and self._memoryCommand(question, dialog):
+			return
+		if not trusted and followup.clearlyOffTopic(question):
 			self._declineQuestion(question, dialog)
 			return
 		if conversation["start"] is None:
@@ -681,8 +458,11 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		self._cancel.set()
 		self._backgroundCancel.set()
 		cancel = self._cancel = threading.Event()
+		# Translators: What VisionMate is doing, said by NVDA+Alt+P.
+		self._startTask(_("answering your question"), cancel)
 		threading.Thread(
-			target=self._answer, args=(conversation, question, dialog, cancel), name="visionMate-describe", daemon=True,
+			target=self._answer, args=(conversation, question, dialog, cancel, trusted), name="visionMate-describe",
+			daemon=True,
 		).start()
 
 	@staticmethod
@@ -694,7 +474,42 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		_speak(reply)
 		wx.CallAfter(dialog.addAnswer, question, reply)
 
-	def _answer(self, conversation, question, dialog, cancel):
+	def _answer(self, conversation, question, dialog, cancel, trusted=False):
+		try:
+			self._answerParts(conversation, question, dialog, cancel, trusted)
+		finally:
+			self._endTask(cancel)
+
+	def _answerParts(self, conversation, question, dialog, cancel, trusted=False):
+		"""A question in several parts, like "what is in it, and is there any text", is asked one part at a time,
+		each with the rule of its kind. A question about colours first gets the colours measured from the pixels."""
+		parts = [question] if trusted else questions.split(question) or [question]
+		measured = ""
+		if any(questions.kind(p) == "colour" for p in parts) and conversation.get("image") is not None:
+			try:
+				measured = colours.sentence(colours.mainColours(conversation["image"]))
+			except Exception:
+				log.debugWarning("VisionMate: could not measure colours", exc_info=True)
+		if measured:
+			_sound("receive")
+			_speak(measured)
+		answers = []
+		for i, part in enumerate(parts):
+			if cancel.is_set():
+				break
+			answer = self._answerOne(conversation, part, cancel, trusted or i > 0, checkQuestion=question)
+			if answer is False:
+				self._declineQuestion(question, dialog)
+				return
+			if answer:
+				answers.append(answer)
+		text = " ".join(answers) or None
+		if text and measured:
+			text = measured + " " + text
+		wx.CallAfter(dialog.addAnswer, question, text)
+
+	def _answerOne(self, conversation, question, cancel, trusted=False, checkQuestion=None):
+		"""Answer one question. Returns the answer, None if there was none, or False if it is not about the image."""
 		messages = list(conversation["start"])
 		for q, a in conversation["history"]:
 			messages += [{"role": "user", "content": q}, {"role": "assistant", "content": a}]
@@ -725,17 +540,23 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		try:
 			with self._inUse():
 				self._ensureEngine()
-				check = self._engine.chat(
-					messages + [{"role": "user", "content": followup.CHECK.format(question=question)}], 2, cancel=cancel,
+				# Questions from the window's quick buttons are about the image, so they skip the check.
+				check = "yes" if trusted else self._engine.chat(
+					messages + [{"role": "user", "content": followup.CHECK.format(question=checkQuestion or question)}], 2,
+					cancel=cancel,
 				)
 				if check is not None and not check.strip().lower().startswith("yes"):
 					declined = True
 				elif check is not None and not cancel.is_set():
+					self._taskStage(cancel, "looking")
 					answer = self._engine.chat(
-						messages + [{"role": "user", "content": question + followup.ANSWER}], 150, onText, cancel,
+						messages + [{"role": "user", "content": self._userPromptPart() + questions.withRule(question)
+							+ followup.ANSWER + self.instructions.own()}], 150, onText, cancel,
 					)
 		except EngineError as e:
 			log.error("VisionMate: follow-up question failed", exc_info=True)
+			if not self._engine.running or self._engine.usingGpu:
+				self._engineFailed()  # the next question starts the engine again
 			if not cancel.is_set():
 				# Translators: Reported when a question about the image could not be answered. {error} is the reason.
 				_speak(_("Could not answer the question: {error}").format(error=e))
@@ -743,250 +564,18 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 			if self._speakingCancel is cancel:
 				self._speakingCancel = None
 		if declined or refused.is_set() or (answer and answer.strip().upper().startswith(NOT_IMAGE)):
-			self._declineQuestion(question, dialog)
-			return
+			return False
 		if not answer:
-			answer = None
-		else:
-			if not state["open"]:
-				_sound("receive")
-				speaker.feed(state["held"])
-			speaker.flush()
-			answer = _clean(answer)
-			conversation["history"] = (conversation["history"] + [(question, answer)])[-FOLLOWUP_HISTORY:]
-		wx.CallAfter(dialog.addAnswer, question, answer)
-
-	# --- Background work ---
-
-	def _queueBackground(self, job, key):
-		if key in self._backgroundKeys or not self._dataReady():
-			return
-		self._backgroundKeys.add(key)
-		self._background.append((job, key))
-		self._backgroundWake.set()
-
-	def _backgroundLoop(self):
-		while not self._stopped.is_set():
-			self._backgroundWake.wait()
-			self._backgroundWake.clear()
-			while self._background and not self._stopped.is_set():
-				# Give way to anything the user asked for, and to what they may ask next.
-				while self._userActive() and not self._stopped.is_set():
-					time.sleep(0.2)
-				try:
-					job, key = self._background.popleft()
-				except IndexError:
-					break  # the overlay closed and dropped its work meanwhile
-				self._backgroundCancel = cancel = threading.Event()
-				self._backgroundKey = key
-				try:
-					with self._inUse():
-						done = job(cancel)
-				except Exception:
-					log.debugWarning("VisionMate: background work failed", exc_info=True)
-					done = True
-				self._backgroundKey = None
-				if done or self._stopped.is_set() or key not in self._backgroundKeys:
-					self._backgroundKeys.discard(key)
-				else:
-					self._background.appendleft((job, key))  # interrupted: try again later
-			self.labels.save()
-
-	def _userActive(self):
-		return self._busy or time.monotonic() - self._lastRequest < BACKGROUND_IDLE_SECONDS
-
-	def _backgroundDescribe(self, image, prompt, maxTokens, size, cancel):
-		self._ensureEngine()
-		return self._engine.describe(prepareImage(image, size), prompt, maxTokens, cancel=cancel)
-
-	def nameIcons(self, app, icons, onNamed):
-		"""Name icons for the overlay in the background, up to 16 at a time from one picture.
-		onNamed() is called after new names arrive."""
-		icons = [(k, crop) for k, crop in icons if (app, k) not in self._iconsQueued]
-		for start in range(0, len(icons), imaging.SHEET_MAX_ICONS):
-			batch = icons[start:start + imaging.SHEET_MAX_ICONS]
-			self._iconsQueued.update((app, k) for k, _crop in batch)
-			self._queueBackground(self._iconJob(app, batch, onNamed), ("icon", app, tuple(k for k, _crop in batch)))
-
-	def _iconJob(self, app, batch, onNamed):
-		def run(cancel):
-			try:
-				done = nameBatch(cancel)
-			except Exception:
-				done = True
-				raise
-			finally:
-				if done is not False:
-					self._iconsQueued.difference_update((app, k) for k, _crop in batch)
-			return done
-
-		def nameBatch(cancel):
-			context = _contextPrompt([("app", app)])
-			if len(batch) == 1:
-				text = self._backgroundDescribe(
-					batch[0][1], context + OVERLAY_ICON_PROMPT + _languageInstruction(), 8, ICON_SIZE, cancel)
-				names = {1: text} if text is not None else None
-			else:
-				prompt = context + ICON_SHEET_PROMPT.format(count=len(batch)) + _languageInstruction()
-				text = self._backgroundDescribe(
-					imaging.iconSheet([crop for _k, crop in batch]), prompt, 8 * len(batch) + 8, SHEET_SIZE, cancel)
-				names = _sheetNames(text, len(batch)) if text is not None else None
-			if names is None:
-				return False  # interrupted; tried again later
-			named = False
-			for number, (iconKey, _crop) in enumerate(batch, 1):
-				name = _iconName(names.get(number, ""))
-				if name:
-					self.labels.setGuess(app, iconKey, name)
-					named = True
-			if named:
-				onNamed()
-				wx.CallAfter(self._refreshOverlaySoon)
-			return True
-		return run
-
-	def _refreshOverlaySoon(self):
-		if self._overlayRefreshPending:
-			return
-		self._overlayRefreshPending = True
-		wx.CallLater(800, self._refreshOverlay)
-
-	def _refreshOverlay(self):
-		"""Show new icon names in an overlay that does not update by itself."""
-		self._overlayRefreshPending = False
-		from . import overlay
-		obj = api.getFocusObject()
-		recognizer = getattr(obj, "recognizer", None)
-		if not isinstance(recognizer, overlay.OverlayRecognizer) or recognizer.allowAutoRefresh:
-			return
-		try:
-			obj._recognize(obj._onResult)
-		except Exception:
-			log.debugWarning("VisionMate: could not refresh the overlay", exc_info=True)
-
-	@staticmethod
-	def _progressBeeps(cancel, stop):
-		while not stop.wait(1.0):
-			if cancel.is_set():
-				return
-			_sound("working")
-
-	@staticmethod
-	def _pressMode():
-		return DETAILED if scriptHandler.getLastScriptRepeatCount() > 0 else QUICK
+			return None
+		if not state["open"]:
+			_sound("receive")
+			speaker.feed(state["held"])
+		speaker.flush()
+		answer = _clean(answer)
+		conversation["history"] = (conversation["history"] + [(question, answer)])[-FOLLOWUP_HISTORY:]
+		return answer
 
 	# --- Automatic descriptions of unlabeled images ---
-
-	def _remember(self, key, text):
-		self._autoCache[key] = text
-		self._autoCache.move_to_end(key)
-		while len(self._autoCache) > AUTO_CACHE_SIZE:
-			self._autoCache.popitem(last=False)
-
-	def _speakTextInfo(self, info, *args, **kwargs):
-		result = self._origSpeakTextInfo(info, *args, **kwargs)
-		if conf()["autoDescribe"] and self._hasData:
-			reason = kwargs.get("reason", args[3] if len(args) > 3 else None)
-			if reason in (OutputReason.CARET, OutputReason.FOCUS, OutputReason.QUICKNAV):
-				try:
-					self._autoDescribeIn(info)
-				except Exception:
-					# Never let this break NVDA's own reading.
-					log.debugWarning("VisionMate: automatic description check failed", exc_info=True)
-		return result
-
-	def _autoDescribeIn(self, info):
-		self._autoGeneration += 1
-		if scriptHandler.isScriptWaiting():
-			return  # the user is moving on; do not slow them down
-		document = getattr(info, "obj", None)
-		context = self._documentContext(info, document)
-		found = autodescribe.findUnlabeledGraphic(info)
-		if found is not None:
-			locate, place = found
-			# Give browse mode a moment to scroll the image into view before taking its picture.
-			wx.CallLater(150, self._autoCapture, locate, self._autoGeneration, document, place, context)
-		if conf()["readAhead"] and getattr(document, "getNVDAObjectFromIdentifier", None) is not None:
-			wx.CallLater(READ_AHEAD_DELAY_MS, self._readAhead, info, self._autoGeneration, context)
-
-	@staticmethod
-	def _documentContext(info, document):
-		return [
-			("app", _safe(lambda: document.rootNVDAObject.appModule.appName) or _safe(lambda: document.appModule.appName)),
-			("page title", _safe(lambda: document.rootNVDAObject.name)),
-			("text next to the image", _safe(lambda: info.text)),
-		]
-
-	def _readAhead(self, info, generation, context):
-		"""Describe images a little further down the page in the background, so they are instant when reached."""
-		if generation != self._autoGeneration or self._busy or scriptHandler.isScriptWaiting():
-			return
-		try:
-			ahead = info.copy()
-			ahead.collapse(end=True)
-			ahead.move(textInfos.UNIT_LINE, READ_AHEAD_LINES, endPoint="end")
-			found = autodescribe.findUnlabeledGraphics(ahead, limit=READ_AHEAD_IMAGES * 3)
-		except Exception:
-			log.debugWarning("VisionMate: read ahead failed", exc_info=True)
-			return
-		window = _safe(lambda: api.getForegroundObject().location)
-		queued = 0
-		for locate, _place in found:
-			loc = _safe(locate)
-			if not autodescribe.bigEnough(loc) or not window or not self._inside(loc, window):
-				continue
-			image = self._grabOrReport(_bbox(loc), quiet=True)
-			if image is None or autodescribe.isBlank(image):
-				continue
-			key = hashlib.sha1(image.tobytes()).hexdigest()
-			if key in self._autoCache:
-				continue
-			self._queueBackground(self._readAheadJob(image, key, context), ("auto", key))
-			queued += 1
-			if queued >= READ_AHEAD_IMAGES:
-				break
-
-	def _readAheadJob(self, image, key, context):
-		prompt = _contextPrompt(context[:2]) + AUTO_PROMPT + HONESTY + _languageInstruction()
-
-		def run(cancel):
-			text = self._backgroundDescribe(image, prompt, 80, conf()["quickSize"], cancel)
-			if text is None:
-				return False
-			if text:
-				wx.CallAfter(self._remember, key, text)
-			return True
-		return run
-
-	@staticmethod
-	def _inside(loc, outer):
-		return (loc.left >= outer.left and loc.top >= outer.top
-			and loc.left + loc.width <= outer.left + outer.width and loc.top + loc.height <= outer.top + outer.height)
-
-	def _autoCapture(self, locate, generation, document=None, place=None, context=()):
-		if generation != self._autoGeneration or scriptHandler.isScriptWaiting():
-			return
-		loc = _safe(locate)
-		if not autodescribe.bigEnough(loc):
-			return
-		image = self._grabOrReport(_bbox(loc), quiet=True)
-		if image is None or autodescribe.isBlank(image):
-			return
-		key = hashlib.sha1(image.tobytes()).hexdigest()
-		if self._repeats.seen(document, key, place):
-			return
-		cached = self._autoCache.get(key)
-		if cached:
-			self._autoCache.move_to_end(key)
-			# Translators: Spoken before an automatic description of an image without a label.
-			ui.message(_("Image: ") + _clean(cached))
-			return
-		self._describe(image, AUTO, cacheKey=key, context=context)
-
-	def setAutoDescribe(self, on):
-		conf()["autoDescribe"] = on
-		if not on:
-			self._autoGeneration += 1
 
 	@script(
 		# Translators: Description of a command in the Input Gestures dialog.
@@ -1005,373 +594,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 			else _("Automatic image descriptions off")
 		)
 
-	# --- Naming buttons from their icons, and images that get focus outside browse mode ---
-
-	def event_gainFocus(self, obj, nextHandler):
-		if self._overlayDoc is not None and self._holdOverlay(obj):
-			return  # NVDA stays in the overlay, which updates in place
-		if self._isQuiet(obj):
-			return
-		nextHandler()
-		self._focusGeneration += 1
-		try:
-			localmedia.warmUp(obj.appModule.appName)
-		except Exception:
-			pass  # objects can die at any time
-		try:
-			self._sayChatPhoto(obj)
-		except Exception:
-			log.debugWarning("VisionMate: WinZapp photo check failed", exc_info=True)
-		if not self._hasData:
-			return
-		try:
-			self._checkFocus(obj, self._focusGeneration)
-		except Exception:
-			# Never let this break NVDA's own focus handling.
-			log.debugWarning("VisionMate: focus check failed", exc_info=True)
-
-	def event_foreground(self, obj, nextHandler):
-		if self._isQuiet(obj):
-			return
-		nextHandler()
-
-	def _isQuiet(self, obj):
-		"""True for focus changes caused by fetching a WinZapp photo: the viewer it opens, which is hidden at once, and
-		WinZapp getting the focus back on the same message."""
-		if time.monotonic() > self._quietUntil:
-			return False
-		try:
-			app = (obj.appModule.appName or "").lower()
-			if app in winzapp.VIEWER_APPS:
-				return True
-			if winzapp.isWinZapp(app):
-				# The window coming back to the front, or the message the user is still on.
-				return obj.windowHandle == self._quietTop or (self._quietFocus is not None and obj == self._quietFocus)
-		except Exception:
-			log.debugWarning("VisionMate: quiet check failed", exc_info=True)
-		return False
-
-	# --- Photos in WinZapp ---
-
-	def _chatPhotoTarget(self, obj):
-		"""(WinZapp window, Open image button, message key) when obj is a selected photo message in WinZapp, else None."""
-		appModule = _safe(lambda: obj.appModule)
-		if appModule is None or not winzapp.isWinZapp(appModule.appName) or obj.role != controlTypes.Role.LISTITEM:
-			return None
-		if controlTypes.State.SELECTED not in obj.states:
-			return None  # the button belongs to the selected message
-		top = api.getForegroundObject().windowHandle
-		appDir = os.path.dirname(_safe(lambda: appModule.appPath) or "")
-		button = winzapp.openImageButton(top, winzapp.openImageNames(appDir))
-		if not button:
-			return None
-		return top, button, winzapp.messageKey(winzapp.chatName(obj.windowHandle), obj.name)
-
-	def _sayChatPhoto(self, obj):
-		"""On a WinZapp photo message that was described before, say what the photo shows."""
-		appName = _safe(lambda: obj.appModule.appName)
-		if not winzapp.isWinZapp(appName) or obj.role != controlTypes.Role.LISTITEM:
-			return
-		text = self.chatPhotos.get(winzapp.messageKey(winzapp.chatName(obj.windowHandle), obj.name))
-		if text:
-			# Translators: Spoken after a WinZapp photo message, before what its photo shows.
-			ui.message(_("Image: ") + text)
-
-	def _describeChatPhoto(self, obj):
-		"""NVDA+Alt+A on a photo message in WinZapp. Returns False if obj is not one."""
-		target = self._chatPhotoTarget(obj)
-		if target is None:
-			return False
-		key = target[2]
-		mode = self._pressMode()
-		fetch = self._chatFetch
-		if fetch is not None and fetch["key"] == key and fetch["image"] is None and not fetch["cancel"].is_set():
-			fetch["mode"] = mode  # a second press while the photo is still coming
-			return True
-		if mode == QUICK:
-			saved = self.chatPhotos.get(key)
-			if saved:
-				ui.message(saved)
-				return True
-		elif self._chatPhoto is not None and self._chatPhoto[0] == key:
-			self._describeChatPhotoNow(key, self._chatPhoto[1], mode)
-			return True
-		if not self._dataReady():
-			self.showDataDialog()
-			return True
-		self._startChatFetch(target, mode)
-		return True
-
-	def _startChatFetch(self, target, mode):
-		"""Get the photo of a WinZapp message in the background, then describe it."""
-		top, button, key = target
-		if self._chatFetch is not None:
-			self._chatFetch["cancel"].set()
-		focus = api.getFocusObject()
-		fetch = self._chatFetch = {"key": key, "mode": mode, "image": None, "cancel": threading.Event(), "focus": focus}
-		self._quietFocus = focus
-		self._quietTop = top
-		self._quietUntil = time.monotonic() + winzapp.FETCH_SECONDS + winzapp.VIEWER_SECONDS
-
-		def onPhoto(image):
-			fetch["image"] = image if image is not None else False
-			wx.CallAfter(self._chatPhotoReady, fetch)
-
-		def run():
-			try:
-				winzapp.fetchPhoto(top, button, fetch["cancel"], onPhoto)
-			except Exception:
-				log.error("VisionMate: could not get the photo from WinZapp", exc_info=True)
-				if fetch["image"] is None:
-					onPhoto(None)
-			finally:
-				if self._chatFetch is fetch:
-					self._quietUntil = time.monotonic() + CHAT_PHOTO_QUIET_SECONDS
-
-		def stillComing():
-			if fetch["image"] is None and not fetch["cancel"].is_set() and self._chatFetch is fetch:
-				# Translators: Spoken when a WinZapp photo takes a while, usually because it is being downloaded.
-				ui.message(_("Getting the photo"))
-
-		threading.Thread(target=run, name="visionMate-winzapp", daemon=True).start()
-		if mode != AUTO:
-			wx.CallLater(CHAT_PHOTO_WAIT_MS, stillComing)
-
-	def _chatPhotoReady(self, fetch):
-		if fetch["cancel"].is_set() or self._chatFetch is not fetch:
-			return
-		if fetch["image"] is False:
-			if fetch["mode"] != AUTO:
-				_sound("error")
-				# Translators: Reported when WinZapp did not give VisionMate the photo of a message.
-				ui.message(_("Could not get the photo from WinZapp."))
-			return
-		key, image = fetch["key"], fetch["image"]
-		self._chatPhoto = (key, image)
-		if fetch["mode"] == AUTO and api.getFocusObject() != fetch["focus"]:
-			# The user moved on: describe it quietly, so it is ready when they come back.
-			self._queueBackground(self._chatPhotoJob(key, image), ("chat", key))
-			return
-		self._describeChatPhotoNow(key, image, fetch["mode"])
-
-	def _chatPhotoJob(self, key, image):
-		prompt = _contextPrompt(CHAT_PHOTO_CONTEXT) + AUTO_PROMPT + HONESTY + _languageInstruction()
-
-		def run(cancel):
-			text = self._backgroundDescribe(image, prompt, 80, conf()["quickSize"], cancel)
-			if text is None:
-				return False
-			if text and not self.chatPhotos.get(key):
-				self.chatPhotos.set(key, " ".join(_clean(text).split()))
-			return True
-		return run
-
-	def _describeChatPhotoNow(self, key, image, mode):
-		def onDone(text, doneMode):
-			# The short description is the one said on the message; a detailed one is kept only if there is none.
-			if doneMode == QUICK or not self.chatPhotos.get(key):
-				self.chatPhotos.set(key, " ".join(_clean(text).split()))
-
-		self._describe(image, mode, context=CHAT_PHOTO_CONTEXT, onDone=onDone)
-
-	def _checkFocus(self, obj, generation):
-		c = conf()
-		if c["autoDescribe"] and self._autoPhoto(obj, generation):
-			return
-		if not (c["iconLabeler"] or c["autoDescribe"]) or not autodescribe.isUnlabeled(obj.name):
-			return
-		role = obj.role
-		if c["iconLabeler"] and role in ICON_ROLES and not (obj.description or "").strip():
-			wx.CallLater(100, self._labelFocusedButton, obj, generation)
-		elif c["autoDescribe"] and role == controlTypes.Role.GRAPHIC:
-			ti = obj.treeInterceptor
-			if ti is None or ti.passThrough:  # browse mode is handled while reading
-				wx.CallLater(150, self._autoCapture, lambda: obj.location, self._autoGeneration, None, None,
-					_windowContext())
-
-	# --- Automatic descriptions of photos: in messages of any app, and in image viewers ---
-
-	def _autoPhoto(self, obj, generation):
-		"""Describe a photo where the focus landed, once the user stays there for a moment. Returns True if obj is a
-		photo message or the focus is in an image viewer, so nothing else needs checking."""
-		if self._viewerName(api.getForegroundObject()):
-			wx.CallLater(VIEWER_DELAY_MS, self._autoViewer)
-			return True
-		if obj.role not in PHOTO_HOLDER_ROLES:
-			return False
-		if explorer.isExplorer(_safe(lambda: obj.appModule.appName)):
-			# Image files in File Explorer and on the desktop are described from the file, not the thumbnail.
-			wx.CallLater(AUTO_FOCUS_DELAY_MS, self._autoExplorerFile, obj, generation)
-			return True
-		target = self._chatPhotoTarget(obj)
-		if target is not None:
-			if not self.chatPhotos.get(target[2]):  # a described one was already said with the message
-				wx.CallLater(AUTO_FOCUS_DELAY_MS, self._autoChatPhoto, obj, target, generation)
-			return True
-		loc = obj.location
-		if winzapp.isWinZapp(_safe(lambda: obj.appModule.appName)) or not loc or loc.height < imaging.PHOTO_MIN_SIDE:
-			return False
-		wx.CallLater(AUTO_FOCUS_DELAY_MS, self._autoMessagePhoto, obj, generation)
-		return False
-
-	def _stillThere(self, generation):
-		return generation == self._focusGeneration and not scriptHandler.isScriptWaiting()
-
-	def _autoChatPhoto(self, obj, target, generation):
-		if self._stillThere(generation) and self._dataReady():
-			self._startChatFetch(target, AUTO)
-
-	def _autoMessagePhoto(self, obj, generation):
-		"""A message in a chat app that shows its photo on screen, like WhatsApp or Telegram."""
-		if not self._stillThere(generation) or not self._dataReady():
-			return
-		loc = _safe(lambda: obj.location)
-		if not loc or loc.width <= 0 or loc.height <= 0:
-			return
-		bbox = _bbox(loc)
-		image = self._grabOrReport(bbox, quiet=True)
-		if image is None:
-			return
-		photo = _safe(lambda: self._photoIn(obj, bbox, image))
-		if not photo:
-			return
-		image = image.crop(photo)
-		if autodescribe.isBlank(image):
-			return
-		key = hashlib.sha1(image.tobytes()).hexdigest()
-		cached = self._autoCache.get(key)
-		if cached:
-			self._autoCache.move_to_end(key)
-			ui.message(_("Image: ") + _clean(cached))
-			return
-		self._describeMessagePhoto(image, AUTO, _safe(lambda: obj.appModule.appName), cacheKey=key, generation=generation)
-
-	def _describeMessagePhoto(self, preview, mode, appName, cacheKey=None, generation=None):
-		"""Describe a photo cut from a chat message. If the app keeps the full-size photo as a file, like Unigram, that
-		is found in the background and described instead, so small text can be read. With a focus generation, it is
-		dropped if the user moved on meanwhile."""
-		context = _windowContext() + [("shown", "a photo someone sent in a chat")]
-		if not localmedia.folders(appName):
-			self._describe(preview, mode, cacheKey=cacheKey, context=context, screen=True)
-			return
-		self._originalRequest += 1
-		request = self._originalRequest
-
-		def describe(image):
-			# Only the newest request: a second press replaces the first.
-			if request != self._originalRequest or (generation is not None and not self._stillThere(generation)):
-				return
-			self._describe(image, mode, cacheKey=cacheKey, context=context, screen=True)
-
-		def find():
-			path = localmedia.findOriginal(preview, appName)
-			image = viewers.openImage(path) if path else None
-			wx.CallAfter(describe, image if image is not None else preview)
-
-		threading.Thread(target=find, name="visionMate-original", daemon=True).start()
-
-	@staticmethod
-	def _viewerName(fg):
-		"""The image file name in the title of the window in front, like "beach.jpg - Photos", or None."""
-		return viewers.imageName(_safe(lambda: fg.name))
-
-	def _describeViewerImage(self):
-		"""In an image viewer, describe the image file it shows at full quality. Returns False if not in one."""
-		if not self._viewerName(api.getForegroundObject()):
-			return False
-		found = viewers.imageInWindow(_safe(lambda: api.getForegroundObject().name))
-		# If the file was not found, the screen is described instead.
-		return bool(found) and self._describeFile(found[0], self._pressMode())
-
-	@staticmethod
-	def _fileKey(path):
-		try:
-			return f"file:{path}:{os.path.getmtime(path)}"
-		except OSError:
-			return None
-
-	def _describeFile(self, path, mode):
-		"""Describe an image file. Returns False if it cannot be read, like a format VisionMate does not know."""
-		key = self._fileKey(path)
-		if mode == AUTO:
-			cached = self._autoCache.get(key)
-			if cached:
-				self._autoCache.move_to_end(key)
-				ui.message(_("Image: ") + _clean(cached))
-				return True
-		image = viewers.openImage(path)
-		if image is None:
-			return False
-		self._describe(image, mode, cacheKey=key, context=[("file name", os.path.basename(path))])
-		return True
-
-	def _explorerImage(self, obj):
-		"""The image file an item in File Explorer or on the desktop stands for, or None."""
-		if not explorer.isExplorer(_safe(lambda: obj.appModule.appName)) or obj.role != controlTypes.Role.LISTITEM:
-			return None
-		fg = api.getForegroundObject()
-		onDesktop = _safe(lambda: fg.windowClassName) in ("Progman", "WorkerW")
-		return explorer.imageFile(_safe(lambda: fg.windowHandle), obj.name, onDesktop)
-
-	def _autoExplorerFile(self, obj, generation):
-		if not self._stillThere(generation) or not self._dataReady():
-			return
-		path = _safe(lambda: self._explorerImage(obj))
-		if path:
-			self._describeFile(path, AUTO)
-
-	def _autoViewer(self):
-		"""An image viewer is in front: describe its photo once."""
-		if not conf()["autoDescribe"] or not self._dataReady() or time.monotonic() < self._quietUntil:
-			return
-		found = viewers.imageInWindow(_safe(lambda: api.getForegroundObject().name))
-		if not found:
-			return
-		path = found[0]
-		key = self._fileKey(path)
-		if key is None or key == self._viewerShown:
-			return  # the focus moved inside the viewer; this photo was already said
-		self._viewerShown = key
-		self._describeFile(path, AUTO)
-
-	def event_nameChange(self, obj, nextHandler):
-		nextHandler()
-		# A viewer shows the next photo by changing its title.
-		try:
-			if conf()["autoDescribe"] and obj == api.getForegroundObject() and self._viewerName(obj):
-				wx.CallLater(VIEWER_DELAY_MS, self._autoViewer)
-		except Exception:
-			log.debugWarning("VisionMate: viewer title check failed", exc_info=True)
-
-	def _buttonImage(self, obj):
-		"""A picture of a small button, or None."""
-		loc = obj.location
-		if not loc or not (ICON_MIN_SIDE <= loc.width <= ICON_MAX_SIDE and ICON_MIN_SIDE <= loc.height <= ICON_MAX_SIDE):
-			return None
-		return self._grabOrReport(_bbox(loc), quiet=True)
-
-	def _labelFocusedButton(self, obj, generation):
-		if generation != self._focusGeneration or scriptHandler.isScriptWaiting():
-			return
-		image = self._buttonImage(obj)
-		if image is None:
-			return
-		app = _safe(lambda: obj.appModule.appName)
-		key = labels.imageKey(image)
-		name, byUser = self.labels.get(app, key)
-		if name:
-			# Translators: Spoken when a button without a name is focused. {name} is a guess from its icon.
-			ui.message(name if byUser else _("Probably {name}").format(name=name))
-			return
-
-		def onDone(text):
-			name = _iconName(text)
-			if name:
-				self.labels.setGuess(app, key, name)
-				if generation == self._focusGeneration:
-					_speak(_("Probably {name}").format(name=name))
-
-		self._describe(image, ICON, context=[("app", app)], onDone=onDone)
+	# --- Naming buttons and items yourself, and the automatic icon labeler ---
 
 	@script(
 		# Translators: Description of a command in the Input Gestures dialog.
@@ -1407,6 +630,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 			try:
 				offset = focus.makeTextInfo(textInfos.POSITION_CARET)._startOffset
 			except Exception:
+				log.debug("VisionMate: no caret offset in the overlay")
 				offset = None
 			item = result.itemAt(offset) if result is not None and offset is not None else None
 			if item is None:
@@ -1434,32 +658,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		current, _byUser = self.labels.get(app, key)
 		self._askName(current or focus.name or "", lambda name: self.labels.setUser(app, key, name))
 
-	def _askName(self, current, onName):
-		def show():
-			# Translators: Title and prompt of the window for naming a button or overlay item.
-			dlg = wx.TextEntryDialog(gui.mainFrame, _("Name (leave empty to remove your name):"), _("VisionMate name"),
-				value=current)
-			gui.mainFrame.prePopup()
-			try:
-				ok = dlg.ShowModal() == wx.ID_OK
-				name = dlg.GetValue().strip()
-			finally:
-				dlg.Destroy()
-				gui.mainFrame.postPopup()
-			if ok:
-				onName(name)
-				# Translators: Reported after a name was saved or removed.
-				ui.message(_("Name saved") if name else _("Name removed"))
-
-		wx.CallAfter(show)
-
 	# --- The overlay for inaccessible windows ---
-
-	def captureForOverlay(self, box):
-		try:
-			return self._grab(box)
-		except curtain.CurtainBlocked:
-			raise RuntimeError(_curtainBlockedMessage())
 
 	@script(
 		# Translators: Description of a command in the Input Gestures dialog.
@@ -1472,133 +671,16 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	def script_overlay(self, gesture):
 		self.openOverlay()
 
-	def openOverlay(self, restore=False):
-		try:
-			from contentRecog import RecogImageInfo, recogUi
-			from . import overlay
-		except ImportError:
-			log.debugWarning("VisionMate: content recognition is not available", exc_info=True)
-			return
-		focus = api.getFocusObject()
-		if isinstance(focus, overlay.OverlayDocument):
-			if not restore:
-				# Pressing NVDA+Alt+O again closes the overlay.
-				focus.script_exit(None)
-			return
-		fg = api.getForegroundObject()
-		loc = _windowBox(fg)
-		app = _safe(lambda: fg.appModule.appName) or "?"
-		recognizer = overlay.OverlayRecognizer(self, app, live=conf()["overlayLive"], underCurtain=curtain.isOn(),
-			title=_safe(lambda: fg.name) or "")
-		try:
-			imageInfo = RecogImageInfo.createFromRecognizer(loc.left, loc.top, loc.width, loc.height, recognizer)
-		except ValueError:
-			ui.message(_("This window has no location on screen."))
-			return
-		# The same steps as NVDA's own recognizeNavigatorObject, but with the overlay's own document.
-		if getattr(recogUi, "_activeRecog", None):
-			recogUi._activeRecog.cancel()
-		recogUi._activeRecog = recognizer
-		if not restore:
-			sounds.play("overlayOpen")
-			# Translators: Reported while the overlay is being prepared.
-			ui.message(_("Overlay"))
-		try:
-			# NVDA creates its objects from keyword arguments only.
-			document = overlay.OverlayDocument(
-				plugin=self, restoreText=self._overlayItem if restore else None, recognizer=recognizer,
-				imageInfo=imageInfo,
-			)
-			document.start()
-		except Exception:
-			log.error("VisionMate: could not open the overlay", exc_info=True)
-			self.overlayClosed()
-			sounds.play("error")
-			# Translators: Reported when the overlay could not be opened.
-			ui.message(_("Could not open the overlay."))
-			return
-		self._overlayWindow = _safe(lambda: fg.windowHandle)
-		self._overlayDoc = document
-
-	def overlayClicked(self, itemText):
-		"""An item was clicked. A click can open another window, so for a moment the overlay follows the window
-		in front. Without live updates, show the result of the click once the window has reacted."""
-		self._overlayItem = itemText
-		self._overlayFollowUntil = time.monotonic() + OVERLAY_FOLLOW_SECONDS
-		doc = self._overlayDoc
-		if doc is not None and not doc.recognizer.allowAutoRefresh:
-			wx.CallLater(OVERLAY_REOPEN_MS, self._refreshOverlayNow, doc)
-
-	def _overlayLeft(self):
-		"""True if the user has moved to another window, not just clicked something that opened one."""
-		fg = api.getForegroundObject()
-		return (_safe(lambda: fg.windowHandle) != self._overlayWindow
-			and time.monotonic() > self._overlayFollowUntil)
-
-	def overlayClosed(self):
-		# Icons not named yet are not needed now; naming them would only hold up the next description.
-		icons = [item for item in list(self._background) if item[1][0] == "icon"]
-		for item in icons:
-			try:
-				self._background.remove(item)
-			except ValueError:
-				pass
-			self._backgroundKeys.discard(item[1])
-		key = self._backgroundKey
-		if key is not None and key[0] == "icon":
-			self._backgroundKeys.discard(key)
-			self._backgroundCancel.set()
-		self._iconsQueued.clear()
-		self._overlayWindow = None
-		self._overlayItem = None
-		self._overlayFollowUntil = 0
-		self._overlayDoc = None
-
-	def _holdOverlay(self, obj):
-		"""The real window took the focus, for example after a click. Keep NVDA in the overlay, silently, and
-		update it in place: the same window refreshes, a new window replaces the contents.
-		Returns False if the overlay should close, because the user moved to another program."""
-		from . import overlay
-		doc = self._overlayDoc
-		if isinstance(obj, overlay.OverlayDocument):
-			return False
-		if self._overlayLeft():
-			self.overlayClosed()
-			return False
-		fg = api.getForegroundObject()
-		# Escape goes back to the real control that has the focus now. Set first: NVDA builds the focus
-		# ancestors from it.
-		doc.parent = obj
-		try:
-			api.setFocusObject(doc)
-		except Exception:
-			log.debugWarning("VisionMate: could not keep the overlay", exc_info=True)
-			self.overlayClosed()
-			return False
-		handle = _safe(lambda: fg.windowHandle)
-		if handle != self._overlayWindow:
-			self._retargetOverlay(doc, fg)
-			self._overlayWindow = handle
-		doc.recognizer.namesChanged()  # read the window again even if it looks the same
-		doc.keepAlive()
-		return True
-
-	def _retargetOverlay(self, doc, fg):
-		"""Point the overlay at a new window."""
-		from contentRecog import RecogImageInfo
-		loc = _windowBox(fg)
-		recognizer = doc.recognizer
-		recognizer.app = _safe(lambda: fg.appModule.appName) or "?"
-		recognizer.title = _safe(lambda: fg.name) or ""
-		try:
-			doc.imageInfo = RecogImageInfo.createFromRecognizer(loc.left, loc.top, loc.width, loc.height, recognizer)
-		except ValueError:
-			return
-		doc.newWindow()
-
-	def _refreshOverlayNow(self, doc):
-		if doc is self._overlayDoc and api.getFocusObject() is doc:
-			doc.refreshNow()
+	@script(
+		# Translators: Description of a command in Input Gestures.
+		description=_(
+			"Finds something in the current window, like the Save button: says roughly where it is and offers to "
+			"click it or move the mouse there"
+		),
+		gesture="kb:NVDA+alt+e",
+	)
+	def script_findOnScreen(self, gesture):
+		self.findOnScreen()
 
 	# --- Image sources ---
 
@@ -1660,7 +742,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		if photo:
 			self._describeMessagePhoto(image.crop(photo), self._pressMode(), _safe(lambda: obj.appModule.appName))
 			return
-		self._describe(image, self._pressMode(), context=context, screen=True)
+		# Translators: What VisionMate is doing, said by NVDA+Alt+P.
+		self._describe(image, self._pressMode(), context=context, screen=True, what=_("describing the element"))
 
 	@staticmethod
 	def _photoIn(obj, bbox, image):
@@ -1698,7 +781,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 			return
 		image = self._grabOrReport(_bbox(_windowBox(api.getForegroundObject())))
 		if image is not None:
-			self._describe(image, self._pressMode(), context=_windowContext(), screen=True)
+			# Translators: What VisionMate is doing, said by NVDA+Alt+P.
+			self._describe(image, self._pressMode(), context=_windowContext(), screen=True, what=_("describing the window"))
 
 	@script(
 		# Translators: Description of a command in the Input Gestures dialog.
@@ -1708,7 +792,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	def script_describeScreen(self, gesture):
 		image = self._grabOrReport()
 		if image is not None:
-			self._describe(image, self._pressMode(), context=_windowContext(), screen=True)
+			# Translators: What VisionMate is doing, said by NVDA+Alt+P.
+			self._describe(image, self._pressMode(), context=_windowContext(), screen=True, what=_("describing the screen"))
 
 	@script(
 		# Translators: Description of a command in the Input Gestures dialog.
@@ -1734,6 +819,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 					context = [("file name", os.path.basename(path))]
 					break
 				except Exception:
+					log.debugWarning(f"VisionMate: clipboard file is not a picture: {path}", exc_info=True)
 					continue
 			else:
 				content = None
@@ -1741,11 +827,69 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 			# Translators: Reported when there is no image on the clipboard.
 			ui.message(_("No image or image file on the clipboard."))
 			return
-		self._describe(content, self._pressMode(), context=context)
+		# Translators: What VisionMate is doing, said by NVDA+Alt+P.
+		self._describe(content, self._pressMode(), context=context, what=_("describing the clipboard"))
+
+	# --- Stop, how far, help, pointer and controller modes, the newest picture ---
+
+	@script(
+		# Translators: Description of a command in Input Gestures.
+		description=_("Stops a description or an answer that is still coming, or a held mouse button"),
+		gesture="kb:NVDA+alt+x",
+	)
+	def script_stop(self, gesture):
+		self.stopAll()
+
+	@script(
+		# Translators: Description of a command in Input Gestures.
+		description=_("Says how far VisionMate is with a description or an answer"),
+		gesture="kb:NVDA+alt+p",
+	)
+	def script_status(self, gesture):
+		self.sayStatus()
+
+	@script(
+		# Translators: Description of a command in Input Gestures.
+		description=_(
+			"Takes the help VisionMate offers where a window, dialog or control tells NVDA little. Press twice for no "
+			"more offers in this program, or to have them back"
+		),
+		gesture="kb:NVDA+alt+y",
+	)
+	def script_takeHelp(self, gesture):
+		self.takeHelp(scriptHandler.getLastScriptRepeatCount() > 0)
+
+	@script(
+		# Translators: Description of a command in Input Gestures.
+		description=_(
+			"Pointer mode: the arrow keys move the mouse pointer, Enter clicks, Space holds the button for dragging, "
+			"A opens more actions, G switches to the game mouse, Escape leaves"
+		),
+		gesture="kb:NVDA+alt+u",
+	)
+	def script_pointerMode(self, gesture):
+		self.setPointerMode(self._inputMode != "pointer")
+
+	@script(
+		# Translators: Description of a command in Input Gestures.
+		description=_("Controller mode: a connected game controller works the mouse pointer in any window"),
+		gesture="kb:NVDA+alt+q",
+	)
+	def script_controllerMode(self, gesture):
+		self.setControllerMode(not self._controllerMode)
+
+	@script(
+		# Translators: Description of a command in Input Gestures.
+		description=_(
+			"Describes the newest picture in a chat, leaving out emoji and the little pictures next to names. "
+			"Press twice for a detailed description in a window."
+		),
+		gesture="kb:NVDA+alt+shift+a",
+	)
+	def script_newestPicture(self, gesture):
+		self.describeNewestPicture(self._pressMode())
 
 
-def _clean_paragraphs(text):
-	return "\n".join(_clean(line) for line in text.splitlines() if _clean(line))
 
 
 if globalVars.appArgs.secure:

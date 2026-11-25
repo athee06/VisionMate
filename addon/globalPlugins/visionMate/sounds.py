@@ -31,4 +31,4 @@ def play(name):
 		import tones
 		tones.beep(*_FALLBACK[name])
 	except Exception:
-		pass
+		log.debugWarning(f"VisionMate: could not beep for {name}", exc_info=True)

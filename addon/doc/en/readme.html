@@ -3,170 +3,160 @@
 <head><meta charset="utf-8"><title>VisionMate</title></head>
 <body>
 <h1>VisionMate</h1>
-<p>VisionMate describes images, screens and on-screen elements on your own computer, and makes windows that
-NVDA cannot read usable through an accessible overlay.
-Images are never sent to the internet, it works without a connection, and there are no accounts, keys or usage limits.</p>
-
-<h2>Getting started</h2>
-<p>After you install VisionMate and restart NVDA, a welcome window opens. VisionMate needs its vision data
-(about 1.5 GB), which is downloaded only once. Press Enter to start the download. While it downloads,
-press Space to hear the progress. When it finishes, the window shows a short usage guide.
-If the download is interrupted, it continues from where it stopped next time.</p>
-
-<h2>Commands</h2>
+<p>Fast, fully offline image descriptions and an accessible overlay for the <a href="https://www.nvaccess.org/">NVDA screen reader</a>.</p>
+<p>VisionMate describes what is on your screen, photos in chat apps, image viewers and File Explorer, on your own computer. For windows and games NVDA cannot read, its overlay turns the window into a list you can move through and click. Images are never sent to the internet. No accounts, no API keys, no usage limits.</p>
+<h2>What's new in 6.0</h2>
+<p><strong>Working the mouse and the screen</strong></p>
 <ul>
-<li><kbd>NVDA+Alt+A</kbd>: describe the current element.</li>
-<li><kbd>NVDA+Alt+W</kbd>: describe the current window, without other windows or the taskbar.</li>
-<li><kbd>NVDA+Alt+F</kbd>: describe the whole screen.</li>
-<li><kbd>NVDA+Alt+D</kbd>: describe the image on the clipboard, or an image file you copied in File Explorer.</li>
-<li><kbd>NVDA+Alt+O</kbd>: open the overlay for the current window.</li>
-<li><kbd>NVDA+Alt+G</kbd>: turn automatic descriptions on or off.</li>
-<li><kbd>NVDA+Alt+B</kbd>: turn names for buttons without a name on or off.</li>
-<li><kbd>NVDA+Alt+N</kbd>: give your own name to the current button, or to the current item in the overlay.</li>
+<li><strong>Pointer mode:</strong> NVDA+Alt+U. The arrow keys move the mouse pointer and VisionMate says what is under it, from NVDA or by reading the text there. Enter clicks, Space holds the button for dragging, H hovers and says what appears, T gives touch and pen gestures, G is a game mouse for games that turn the view with the mouse.</li>
+<li><strong>Controller mode:</strong> NVDA+Alt+Q, or hold View and Menu together: a game controller works the mouse pointer.</li>
+<li><strong>Find on screen:</strong> NVDA+Alt+E. Type what you are looking for, like "Save button". VisionMate says roughly where it is and can click it, move the mouse there, or do more with it.</li>
 </ul>
-<p>Press a command once for a quick spoken description. Press it twice quickly for a longer, more detailed
-description, including visible text, shown in a window with Copy and Close buttons. Press Control to stop speaking.</p>
-<p>For pictures of the screen, VisionMate also reads the text with Windows OCR, the same engine as NVDA+R,
-so names, numbers and codes are read exactly.</p>
-
-<h2>Questions about the image</h2>
-<p>The detailed description window has a question box. Type a question about the image, such as
-"What is the total?" or "What colour is her dress?", and press Enter. The answer is spoken and added to
-the window, so you can read it again. You can ask several questions in a row.
-Questions must be about the image: VisionMate does not answer anything else, such as greetings, small talk,
-general knowledge, maths, writing or jokes. For such questions you hear
-"I can only answer questions about this image."</p>
-
-<h2>Photos in chats, image viewers and File Explorer</h2>
-<p>On a message with a photo, press <kbd>NVDA+Alt+A</kbd>. VisionMate describes the photo itself, not the name,
-time and buttons around it. Press twice for the detailed window, where you can ask about the photo.</p>
+<p><strong>The overlay</strong></p>
 <ul>
-<li>WinZapp (WhatsApp): WinZapp never shows photos on screen. VisionMate gets the photo from WinZapp's
-"Open image" button by itself, and closes the viewer WinZapp opens at once, so you stay on the message and only
-hear the description. The copy WinZapp writes for the viewer is deleted straight away.</li>
-<li>Unigram (Telegram): the full-size photo Unigram keeps on your computer is found and described, so small text
-is read clearly. If the photo is not downloaded yet, the preview on screen is described.</li>
-<li>Other chat apps that show photos on screen, such as WhatsApp or Telegram in a browser: the photo is cut out of the
-message and described.</li>
-<li>Image viewers, such as Photos: <kbd>NVDA+Alt+W</kbd> describes the photo file itself at full quality,
-whatever program opened it.</li>
-<li>File Explorer and the desktop: on an image file, <kbd>NVDA+Alt+A</kbd> describes the file without opening it.</li>
+<li><strong>Actions:</strong> press A on an item for more than a click: hover and hear what appears, drag and drop, press and hold, set a drawn knob or slider to a number, work it with the arrow keys, write on the line next to a label of a scanned form, and touch or pen gestures.</li>
+<li><strong>It sees more:</strong> fields and error messages a form marks in red (R moves to them), colour choices named by their measured colour, and the picture puzzles of checks that ask whether you are a person: the kind of check is named with the ways through it that need no sight, and each square is numbered and described. U moves to the most useful item. Tables are read row by row (T, and Control+Alt+arrows), and areas that scroll say "more below".</li>
+<li><strong>Cleaner:</strong> an icon or thumbnail beside a label is part of that item, not a second one, and NVDA's mouse tracking no longer talks over the overlay.</li>
 </ul>
-<p>A photo message that was described says what its photo shows when you reach it again, like
-"Image: a dog on a sofa". Stickers in WinZapp cannot be described yet, because WinZapp offers no way to open them.</p>
-
-<h2>The overlay for inaccessible windows</h2>
-<p>Some programs and games show buttons and menus that NVDA cannot read. Press <kbd>NVDA+Alt+O</kbd> in such a
-window. VisionMate reads the window's text with Windows OCR, finds its icons, and shows everything as a list,
-one item per line, top to bottom. The first line says the window's name and how many items there are.
-An icon with its name next to it, like a desktop shortcut, is one item.</p>
-<p>VisionMate also works out how the window looks, from its shapes and colours:</p>
+<p><strong>Descriptions</strong></p>
 <ul>
-<li>Areas: when a window has several, like a dialog, a top bar, a left panel and the main area, each starts with
-a line like "Dialog: Sign in, 5 items". A dialog comes first, because it usually needs an answer.
-Columns side by side are read one after the other.</li>
-<li>Kinds of item: buttons, edit fields, checkboxes and radio buttons (with checked or not checked), links and
-headings are said after their text, like "Save button" or "Remember me checkbox, checked".
-Text in a menu or list stays plain text. This works from the picture, so it can be wrong now and then.</li>
+<li><strong>The newest picture in a chat:</strong> NVDA+Alt+Shift+A, leaving out emoji and the little pictures next to names.</li>
+<li><strong>Stop and how far:</strong> NVDA+Alt+X stops a description or an answer. NVDA+Alt+P says how far it is.</li>
+<li><strong>Detailed window:</strong> Read all text, Describe people, Describe colours, Where is..., and Save (Control+S). "What is in this photo, and is there any text in it?" is answered as two questions, and a question about colours first gets the colours measured from the pixels, like "navy blue 60 percent".</li>
+<li><strong>Memories and your own instructions:</strong> type "remember that I am colour blind" in a description window, or add memories in settings. Every instruction VisionMate gives the vision data can be read and rewritten.</li>
 </ul>
+<p><strong>And also</strong></p>
+<ul>
+<li><strong>Help offered:</strong> where a window, dialog or control tells NVDA little, VisionMate says so once; NVDA+Alt+Y takes it.</li>
+<li><strong>VisionMate's own voice:</strong> a different pitch, rate or volume for descriptions and answers.</li>
+<li><strong>Portable copy:</strong> the add-on and its vision data for a flash drive or another computer, so it needs no download.</li>
+<li><strong>Faster and more reliable:</strong> pressing again on a screen that barely changed starts speaking in under a second; the engine restarts by itself if it stops; a dropped download resumes by itself.</li>
+<li><strong>Settings</strong> are in groups, with a Reset to defaults button.</li>
+</ul>
+<h2>Install</h2>
+<ul>
+<li><strong>From the NVDA Add-on Store</strong> (recommended): NVDA menu &gt; Tools &gt; Add-on Store, search for VisionMate, and install it. Updates then come through the Add-on Store.</li>
+<li>Or <strong><a href="https://github.com/athee06/VisionMate/releases/latest/download/VisionMate.nvda-addon">download VisionMate</a></strong>, open the file, confirm the installation, and restart NVDA.</li>
+</ul>
+<p>After installing, a welcome window opens. VisionMate needs its vision data (about 1.5 GB), downloaded only once. Press Enter to download it. While it downloads, press Space to hear the progress. With a portable copy of VisionMate (see Settings), choose <strong>From a portable copy</strong> instead; on a flash drive it is found by itself. If the connection drops, the download continues by itself from where it stopped.</p>
+<h2>The keys</h2>
+<p>Every describe key works the same way: press it <strong>once</strong> for a quick spoken description, or <strong>twice</strong> for a detailed description in a window. Press <strong>Control</strong> to stop speaking. You can change any key in NVDA's Input Gestures dialog, under VisionMate.</p>
+<h3>NVDA+Alt+A: the current element</h3>
+<p>Describes the element under the NVDA navigator, like an image, a button or a photo message. On a photo message it describes the photo itself, not the name and time around it. On an image file in File Explorer or on the desktop, it describes the file without opening it.</p>
+<h3>NVDA+Alt+W: the current window</h3>
+<p>Describes the window in front. In an image viewer such as Photos, it describes the photo file at full quality.</p>
+<h3>NVDA+Alt+F: the whole screen</h3>
+<p>Describes everything on the screen. Screen text is read exactly with Windows OCR.</p>
+<h3>NVDA+Alt+D: the clipboard</h3>
+<p>Describes the image, or the copied image file, on the clipboard.</p>
+<h3>NVDA+Alt+E: find on screen</h3>
+<p>Type what you are looking for, like "Save button", "search box" or just "Settings". VisionMate reads the window while you type, then says what it found and roughly where, like "Save button, at the bottom right". Choose Click, or Move the mouse there. If several things match, choose one from the list. Small spelling mistakes in the screen text are fine.</p>
+<h3>NVDA+Alt+O: the overlay</h3>
+<p>For programs and games whose buttons and menus NVDA cannot read. VisionMate shows the window as a list: its text, its icons (named by the vision data), and what kind of item each one is, like "Save button", "Name edit field" or "Remember me checkbox, checked". A window with a dialog, a sidebar or bars is split into areas, with the dialog first.</p>
 <ul>
 <li>Up and Down arrows, or Tab and Shift+Tab: move between items.</li>
-<li>H, B, E, X, K and D: move to the next heading, button, edit field, checkbox or radio button, link, or area,
-as in browse mode. Add Shift to move to the previous one.</li>
-<li>Enter: activate the item in the real window. Desktop shortcuts and files in a list are opened
-(a double click); everything else gets a single click.</li>
-<li>Space: a single click, for example to only select a desktop shortcut.</li>
-<li>Shift+Enter: always a double click.</li>
-<li>Applications key or Shift+F10: right-click.</li>
-<li>Escape, or <kbd>NVDA+Alt+O</kbd> again: close the overlay.</li>
+<li>H, B, E, X, K, D, T: next heading, button, edit field, checkbox or radio button, link, area, table. Add Shift for the previous one.</li>
+<li>Control+Alt+arrows: move by row and column in a table.</li>
+<li>Enter: click the item in the real window (desktop shortcuts and list items are opened). Space: a single click. Shift+Enter: a double click. Applications key: a right click.</li>
+<li>Escape, or NVDA+Alt+O again: close the overlay.</li>
 </ul>
-<p>The overlay stays open until you close it. After a click it stays where it is and updates in place:
-only what changed is spoken. If the click opens another window, the overlay shows that window instead and
-says its name and number of items. If you switch to another program yourself, it closes.</p>
+<p>The overlay updates itself as the window changes. "Selected:" at the top says which entry of a menu is selected. The overlay works from the picture of the window, so it can sometimes get a name or kind wrong. NVDA+Alt+N lets you fix a name, and your names are kept.</p>
+<h3>NVDA+Alt+G: automatic descriptions</h3>
+<p>Turns automatic descriptions on or off (off by default). When on, images without a label are described in one sentence as you read web pages and documents, and photo messages, image files and photos opened in a viewer are described when you stay on them.</p>
+<h3>NVDA+Alt+B: button names</h3>
+<p>Turns names for buttons that have no name on or off. When on, such buttons are named from their icon.</p>
+<h3>NVDA+Alt+N: your own names</h3>
+<p>Gives your own name to the current button, or to the current item in the overlay.</p>
+<h3>NVDA+Alt+Shift+A: the newest picture in a chat</h3>
+<p>Finds the newest picture in the window, the lowest one that is bigger than emoji and the little pictures next to names, brings it into view and describes it. Press twice for the detailed window.</p>
+<h3>NVDA+Alt+P and NVDA+Alt+X: how far, and stop</h3>
+<p>NVDA+Alt+P says what VisionMate is doing and for how long. NVDA+Alt+X stops a description, an answer, or a held mouse button.</p>
+<h3>NVDA+Alt+U: pointer mode</h3>
+<p>Works the mouse pointer from the keyboard. While pointer mode is on:</p>
 <ul>
-<li>Icons are named by the vision data, for example "Settings icon", or "Settings button" when the icon sits on its own button. The first time this takes a moment,
-and you hear "icon, naming" until the name is ready. Names are remembered for each program, so they are
-instant next time.</li>
-<li>If a menu item looks selected, for example in a game menu you move with the arrow keys, the first line
-says which one, like "Selected: Continue".</li>
-<li>The overlay keeps itself up to date as the window changes, about once a second, and new text is spoken.
-You can turn this off in settings.</li>
-<li>If a name is wrong, press <kbd>NVDA+Alt+N</kbd> on the item and type a better one. Your names always win and
-are kept.</li>
+<li>Arrows: move the pointer (Shift: a little, Control: far). What is under it is said, unless NVDA's mouse tracking says it already.</li>
+<li>Enter: click. Shift+Enter: double-click. Applications key: right-click.</li>
+<li>Space: hold the left button down, move with the arrows, Space again lets go. That is a drag.</li>
+<li>Page Up and Page Down: the mouse wheel. With Shift: sideways.</li>
+<li>Home: the middle of the window. S: say what is under the pointer. H: hover and say what appears.</li>
+<li>A: more actions. T: touch and pen gestures, like a pinch, a swipe with two fingers or a hard pen press. They need no touch screen and no pen.</li>
+<li>G: the game mouse. Many games turn the view with the mouse and take no notice of where the pointer is; with the game mouse the arrows move the mouse itself, the way such a game reads it.</li>
+<li>Escape, or NVDA+Alt+U again: leave pointer mode.</li>
 </ul>
-<p>Limits: fast-moving gameplay cannot be followed. Some games in exclusive full screen give a black picture;
-use windowed or borderless mode. Some games ignore simulated clicks, and anti-cheat software may block them.
-Icon names are guesses and are sometimes wrong.</p>
-
-<h2>Names for buttons without a name</h2>
-<p>Many programs have buttons that NVDA can only call "button". When names for buttons are on
-(<kbd>NVDA+Alt+B</kbd> or in settings), VisionMate looks at the icon when such a button gets focus and says
-what it probably does, like "Probably Settings". Names are remembered for each program. Press
-<kbd>NVDA+Alt+N</kbd> to give a button your own name, which is then always used. It is off by default.</p>
-<h2>Automatic descriptions</h2>
-<p>When automatic descriptions are on, VisionMate describes images that have no useful label
-as you read web pages and documents in browse mode. A label is not useful when it is missing, only a file name
-or a link, or only a word like "image", "photo" or "placeholder". NVDA reads the line as usual, then you hear "Image:"
-and a one-sentence description. Each image is described once and remembered, so returning to it is instant.
-Decorative images are skipped: small icons, thin lines, blank images, and a picture that repeats in many places
-on the page, such as a bullet or a rating star. Moving on stops the description, so reading is never slowed down.
-While you read, images a little further down the page are described in the background, so they are ready
-when you reach them. Images that get focus in programs, and pictures in Word documents and Outlook emails,
-are described too. So are photos: stay on a photo message in a chat app or an image file in File Explorer for a moment,
-or open a photo in an image viewer, and you hear what it shows.
-Turn it on or off with <kbd>NVDA+Alt+G</kbd> or in VisionMate settings. It is off by default.</p>
-<p>You can change these commands in NVDA's Input Gestures dialog, under VisionMate.</p>
-
-<h2>Sounds</h2>
-<p>Each event has its own short sound:</p>
+<h3>NVDA+Alt+Q: controller mode</h3>
+<p>With an Xbox controller, or one Windows reads the same way, connected: the left stick moves the pointer, the right stick scrolls, A clicks, B right-clicks, X double-clicks, Y says what is under the pointer, LB holds the button for dragging, RB hovers, the D-pad moves a little. Hold View and Menu together to turn controller mode on or off. Outside controller mode the controller only goes to the game.</p>
+<h3>NVDA+Alt+Y: take the help offered</h3>
+<p>Where a window tells NVDA almost nothing, a dialog has nothing with the focus, or a button has no name, VisionMate says so once. NVDA+Alt+Y opens the overlay on the most useful item, or names the button. Press it twice for no more offers in that program, and twice again there to have them back. Offers can be turned off in settings.</p>
+<h2>The overlay's actions</h2>
+<p>In the overlay, press <strong>A</strong> on an item, or choose <strong>More</strong> in find on screen:</p>
 <ul>
-<li>Press a command once: one soft pluck. Press it twice: a lower double knock.</li>
-<li>While waiting: a very quiet tick every second (can be turned off in settings).</li>
-<li>Detailed description finished: two rising bell notes.</li>
-<li>Question sent: a short rising whoosh. Answer arriving: a soft falling drop.</li>
-<li>Overlay opens: three rising notes. Overlay closes: two falling notes. Item clicked: a tiny click.</li>
-<li>Something went wrong: two low falling notes.</li>
+<li>Click, double-click, right-click, move the mouse there.</li>
+<li><strong>Hover, and say what appears:</strong> the pointer rests on it and the text that came up, like a tip, is read.</li>
+<li><strong>Start a drag here</strong>, then on another item <strong>Drop here</strong>. Or <strong>drag it a little or a lot</strong> in a direction.</li>
+<li><strong>Press and hold</strong> for a few seconds, for buttons and checks that ask for it.</li>
+<li><strong>Set it to a number:</strong> a knob, dial or slider that is only drawn is moved step by step, and the number next to it is read after each step until it is the number you asked for. Where no number shows, it is left as it is.</li>
+<li><strong>Work it with the arrow keys:</strong> dial mode. Up and down change it, and the number next to it is said. M tries another way of moving it.</li>
+<li><strong>Write on the line next to this label:</strong> on a scanned form that is only a picture, the printed line or box next to the label is found, clicked, and what you type is written there and checked.</li>
+<li><strong>Touch or pen gesture here</strong>, and <strong>pointer mode from here</strong>.</li>
 </ul>
-
+<p>Also in the overlay: <strong>U</strong> moves to the most useful item, where a sighted person's eye goes first, like the selected item, the Continue or OK button, or an empty field. <strong>R</strong> and Shift+R move to items the form marks in red.</p>
+<h2>The detailed window</h2>
+<p>Press a describe key twice to open it. Read the description line by line, then:</p>
+<ul>
+<li>Type a question about the image in the Question box and press Enter. A question in several parts is answered one part at a time. A question about colours first gets the colours measured from the picture's pixels.</li>
+<li>Type <strong>remember that</strong> and something about you, like "remember that I am colour blind, always name colours". VisionMate gives it with every description and answer you ask for. "What do you remember" and "forget ..." work too.</li>
+<li><strong>Read all text:</strong> every bit of text in the image, exactly as written.</li>
+<li><strong>Describe people</strong> and <strong>Describe colours:</strong> answers straight away.</li>
+<li><strong>Where is...:</strong> starts a question for you, like "Where is the".</li>
+<li><strong>Save</strong> (Control+S): saves the description and your questions to a text file.</li>
+<li><strong>Copy</strong>, and <strong>Close</strong> (or Escape).</li>
+</ul>
+<h2>Photos in chat apps</h2>
+<ul>
+<li><strong>WinZapp (WhatsApp):</strong> VisionMate gets each photo through WinZapp's "Open image" button by itself and closes the viewer at once, so you stay on the message. The copy WinZapp writes for the viewer is deleted straight away.</li>
+<li><strong>Unigram (Telegram):</strong> the full-size photo Unigram keeps on your computer is described, so small text is read clearly.</li>
+<li><strong>Other chat apps</strong> that show photos on screen: the photo is cut out of the message.</li>
+</ul>
+<p>WinZapp stickers cannot be described yet, because WinZapp offers no way to open them.</p>
 <h2>Settings</h2>
-<p>NVDA menu, Preferences, Settings, VisionMate:</p>
+<p>NVDA menu &gt; Preferences &gt; Settings &gt; VisionMate. The settings are in five groups:</p>
 <ul>
-<li>Automatically describe images without a label, photos in chats and photos in image viewers: off by default.</li>
-<li>Describe images further down the page in the background: on by default.</li>
-<li>Name buttons that have no name, from their icon: off by default.</li>
-<li>Use Windows OCR to read screen text exactly: on by default.</li>
-<li>Keep the overlay up to date as the window changes: on by default.</li>
-<li>Use the graphics card: much faster. If the graphics card fails, VisionMate switches to the processor automatically.</li>
-<li>Get ready when NVDA starts: the first description is as fast as the rest, but memory stays in use.</li>
-<li>Answer in NVDA's language.</li>
-<li>Play a soft tick while waiting for a description.</li>
+<li><strong>Descriptions:</strong> automatic descriptions, describing images further down the page in the background, names for buttons without a name, Windows OCR, answering in NVDA's language, and a soft tick while waiting. Two buttons open <strong>what VisionMate remembers about you</strong>, and <strong>how VisionMate answers</strong>: every instruction it gives the vision data, to read, rewrite or restore, and your own instruction for every answer.</li>
+<li><strong>Overlay:</strong> keeping the overlay up to date as the window changes.</li>
+<li><strong>Status and help:</strong> after how long "Still working" is said (or never), offering help where a window tells NVDA little, and the game controller: tell me when one is connected, listen quietly, or do not look for one.</li>
+<li><strong>VisionMate's voice:</strong> a pitch, rate and volume change from NVDA's voice for descriptions and answers, and a button to hear it.</li>
+<li><strong>Speed and memory:</strong> using the graphics card, getting ready when NVDA starts, and <strong>making a portable copy</strong> with the vision data, for a flash drive or another computer.</li>
 </ul>
-<p>The screen curtain: VisionMate can see the screen while the screen curtain is on, and never turns the curtain off.
-A few windows, such as some games and video players, cannot be seen this way. VisionMate then asks you to turn the
-screen curtain off with NVDA+Control+Escape.</p>
-
+<p><strong>Reset to defaults</strong> sets them all back; press OK to keep that.</p>
+<p>VisionMate frees its memory by itself when your computer runs low, and on computers with 16 GB of RAM or less after 30 minutes unused. Without "Get ready when NVDA starts", it still gets ready shortly after NVDA starts on computers with plenty of memory, and frees it after 10 minutes unused.</p>
+<p>VisionMate works with NVDA's screen curtain on, without ever turning it off. If a window can't be seen that way (some games and video players), VisionMate asks you to turn the screen curtain off.</p>
+<h2>Requirements</h2>
+<ul>
+<li>Windows 10 or 11, 64-bit</li>
+<li>NVDA 2024.1 or later</li>
+<li>About 3 GB of free disk space while the vision data is installed (2 GB after), and 8 GB of RAM or more (VisionMate uses about 3 GB while it is ready)</li>
+<li>A graphics chip or card that supports Vulkan makes it much faster. Without one, VisionMate uses the processor.</li>
+</ul>
+<h2>What to expect</h2>
+<p>Measured on one laptop: Intel Core Ultra 5 135U with its built-in Intel graphics, 32 GB RAM. Your computer may be faster or slower.</p>
+<table>
+<tr><th></th><th>With graphics (default)</th></tr>
+<tr><td>Quick description: first words</td><td>about 2 seconds</td></tr>
+<tr><td>The same screen again, within 30 seconds</td><td>under 1 second</td></tr>
+<tr><td>Detailed description (press twice): first words</td><td>about 1.5 to 2 seconds after the first press</td></tr>
+<tr><td>Overlay: list ready</td><td>about half a second, plus a few seconds to name new icons</td></tr>
+<tr><td>Memory (RAM) while ready</td><td>about 3 GB</td></tr>
+</table>
+<ul>
+<li>Without a graphics chip, a quick description starts in about 5 seconds.</li>
+<li>Getting ready takes about 4 seconds. With "Get ready when NVDA starts" on (the default), this happens in the background when NVDA starts.</li>
+<li>Images full of text, like receipts and documents, take longer than photos.</li>
+</ul>
 <h2>Accuracy</h2>
-<p>VisionMate uses AI, and AI can make mistakes. Descriptions may miss or misread details,
-so please double-check anything important.</p>
-
-<h2>Speed and memory</h2>
-<p>On a laptop with an Intel Core Ultra 5 and its built-in graphics, a quick description starts in about 2 seconds
-(about 5 seconds without the graphics chip), and a detailed one (press twice) starts about 1 to 2 seconds after the first press. VisionMate uses about
-3 GB of memory while it is ready. Your computer may be faster or slower.</p>
-<p>VisionMate manages its memory by itself. If your computer runs low on memory, VisionMate gives its memory back
-after a minute unused, and gets ready again once enough memory is free. If "Get ready when NVDA starts" is off,
-VisionMate also gives its memory back after 10 minutes unused. After that, the next description takes a few seconds longer.</p>
-<h2>Updates</h2>
-<p>VisionMate updates come through the NVDA Add-on Store. When an update needs new vision data,
-VisionMate offers to download it after NVDA restarts.</p>
-
+<p>VisionMate uses AI, and AI can make mistakes. Descriptions may miss or misread details, so please double-check anything important.</p>
 <h2>Privacy</h2>
-<p>VisionMate does not collect any information about you or your use. It connects to the internet only to
-download its vision data. Photos from chat apps are read on your computer and never copied or sent anywhere;
-only the descriptions of WinZapp photos are kept, as text, so a message can say what its photo shows.</p>
-
+<p>VisionMate does not collect any information about you or your use. It connects to the internet only to download its vision data. What you ask it to remember, and your own instructions, are kept in files on your computer. Photos from chat apps are read on your computer and never copied or sent anywhere. Add-on updates come through the NVDA Add-on Store.</p>
 <h2>Credits</h2>
-<p>Uses <a href="https://github.com/ggml-org/llama.cpp">llama.cpp</a> (MIT licence).
-Licence information for the vision data is included with the data.</p>
+<p>VisionMate uses <a href="https://github.com/ggml-org/llama.cpp">llama.cpp</a> (MIT licence). Licence information for the vision data is included with the data.</p>
 </body>
 </html>

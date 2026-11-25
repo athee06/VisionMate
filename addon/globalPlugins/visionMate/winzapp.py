@@ -87,6 +87,7 @@ def openImageNames(appDir):
 			with open(path, "rb") as f:
 				catalog = gettext.GNUTranslations(f)._catalog
 		except Exception:
+			log.debugWarning(f"VisionMate: could not read WinZapp translations {path}", exc_info=True)
 			continue
 		for key, value in catalog.items():
 			if isinstance(key, str) and key.split("\x04")[0] == OPEN_IMAGE_KEY and isinstance(value, str):
@@ -193,6 +194,7 @@ def _readPhoto(path):
 			image.load()
 			return image.copy()
 	except Exception:
+		log.debug(f"VisionMate: photo not readable yet: {path}")
 		return None  # still being written
 
 

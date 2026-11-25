@@ -62,6 +62,7 @@ def isOn():
 	try:
 		return curtain is not None and curtain.enabled
 	except Exception:
+		log.debugWarning("VisionMate: could not tell if the screen curtain is on", exc_info=True)
 		return False
 
 

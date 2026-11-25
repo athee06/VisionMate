@@ -8,15 +8,28 @@ import ctypes
 import hashlib
 import json
 import os
+import shutil
 import socket
+import time
 import ssl
 import sys
 import urllib.error
 import urllib.parse
 import urllib.request
 
+try:
+	from logHandler import log
+except ImportError:  # outside NVDA, in the tests
+	import logging
+	log = logging.getLogger("visionMate")
+	log.debugWarning = log.warning
+
 USER_AGENT = "VisionMate"
 _BLOCK = 1 << 20
+# A dropped connection is retried this many times, after these waits in seconds, before the user is asked.
+RETRY_WAITS = (2, 5, 15)
+# Extra free space kept on top of what the download and the unpacked data need.
+SPARE_BYTES = 200 * 1024 * 1024
 
 
 class Cancelled(Exception):
@@ -55,6 +68,7 @@ def _hostsFor(url, hops=5):
 				break
 			url = urllib.parse.urljoin(url, location)
 		except Exception:
+			log.debugWarning(f"VisionMate: redirect check stopped at {url}", exc_info=True)
 			break
 	return hosts
 
@@ -117,6 +131,7 @@ def _open(req, timeout):
 		try:
 			refreshed = _refreshWindowsRoots(req.full_url)
 		except Exception:
+			log.debugWarning("VisionMate: could not refresh Windows certificates", exc_info=True)
 			refreshed = False
 		if not refreshed:
 			raise
@@ -176,3 +191,43 @@ def download(url, dest, size=None, sha256=None, onProgress=None, cancel=None):
 		raise ValueError("The downloaded file is damaged. Please try again.")
 	os.replace(part, dest)
 	return dest
+
+
+class NotEnoughSpace(OSError):
+	"""There is not enough free disk space. needed and free are in bytes."""
+
+	def __init__(self, needed, free, folder):
+		super().__init__(f"Not enough free disk space: {needed} bytes needed, {free} free in {folder}")
+		self.needed, self.free, self.folder = needed, free, folder
+
+
+def checkSpace(dest, size, unpackedSize):
+	"""Raise NotEnoughSpace unless the rest of the download plus the unpacked data fit next to dest."""
+	folder = os.path.dirname(dest)
+	part = dest + ".part"
+	have = os.path.getsize(part) if os.path.isfile(part) else 0
+	needed = max(size - have, 0) + unpackedSize + SPARE_BYTES
+	free = shutil.disk_usage(folder).free
+	if free < needed:
+		raise NotEnoughSpace(needed, free, folder)
+
+
+def downloadWithRetries(url, dest, size=None, sha256=None, onProgress=None, cancel=None, onRetry=None,
+		waits=RETRY_WAITS):
+	"""Like download, but a dropped connection is resumed by itself a few times before giving up.
+	Calls onRetry(attempt, seconds) before each wait. A damaged file or a certificate error is not retried."""
+	for attempt, wait in enumerate(tuple(waits) + (None,), 1):
+		try:
+			return download(url, dest, size, sha256, onProgress, cancel)
+		except Cancelled:
+			raise
+		except OSError as e:
+			if wait is None or _isCertError(e) or isinstance(e, NotEnoughSpace):
+				raise
+			if onRetry is not None:
+				onRetry(attempt, wait)
+			if cancel is not None:
+				if cancel.wait(wait):
+					raise Cancelled()
+			else:
+				time.sleep(wait)

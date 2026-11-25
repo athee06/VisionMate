@@ -300,3 +300,15 @@ def iconSheet(crops):
 		sheet.paste(crop, (x + SHEET_NUMBER_WIDTH + (SHEET_CELL - crop.width) // 2, y + (SHEET_CELL - crop.height) // 2))
 		draw.text((x + 6, y + SHEET_CELL // 2 - 12), str(i + 1), font=font, fill="red")
 	return sheet
+
+
+def nearlySame(a, b, maxChanged=0.001, threshold=24):
+	"""True if two pictures are the same size and at most maxChanged of their pixels differ clearly, like a
+	blinking cursor. A new line of text changes far more."""
+	if a is None or b is None or a.size != b.size:
+		return False
+	if a is b:
+		return True
+	diff = ImageChops.difference(a.convert("L"), b.convert("L")).point(lambda v: 255 if v > threshold else 0)
+	changed = diff.histogram()[255]
+	return changed <= maxChanged * a.size[0] * a.size[1]

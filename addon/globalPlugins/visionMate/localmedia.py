@@ -73,6 +73,7 @@ def _entries(folderList):
 					with Image.open(entry.path) as image:
 						width, height = image.size
 				except Exception:
+					log.debug(f"VisionMate: not a picture, or still being written: {entry.path}")
 					width = height = 0  # not a picture, or still being written
 				known = (mtime, width, height, None)
 				with _lock:

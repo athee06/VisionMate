@@ -50,8 +50,10 @@ def focusedFile(hwnd, itemName):
 				if item is not None and not item.IsFolder:
 					found.append(item.Path)
 			except Exception:
+				log.debug("VisionMate: skipped an Explorer window")
 				continue  # a tab that is not a folder, like Home, or one that is closing
 	except Exception:
+		log.debugWarning("VisionMate: could not ask Explorer for the selected file", exc_info=True)
 		global _shell
 		_shell = None
 		log.debugWarning("VisionMate: could not ask Explorer for the focused file", exc_info=True)

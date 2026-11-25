@@ -9,6 +9,7 @@ import re
 
 import controlTypes
 import textInfos
+from logHandler import log
 
 # A label that is only a file name, a link, a code or a generic word does not describe the image.
 _GENERIC = (
@@ -64,6 +65,7 @@ def findUnlabeledGraphics(info, limit=1):
 				ident = (int(attrs["controlIdentifier_docHandle"]), int(attrs["controlIdentifier_ID"]))
 				obj = getObject(*ident)
 			except Exception:  # missing IDs, COM errors, or a document that is going away
+				log.debug("VisionMate: could not get an image object from browse mode")
 				continue
 			found.append((lambda obj=obj: obj.location, ident))
 		else:
@@ -83,6 +85,7 @@ def _bookmark(info):
 	try:
 		return repr(info.bookmark)
 	except Exception:
+		log.debug("VisionMate: no bookmark for this text")
 		return None
 
 
@@ -96,6 +99,7 @@ def _locateAt(info, offset):
 		char.expand(textInfos.UNIT_CHARACTER)
 		rects = char.boundingRects
 	except Exception:  # not supported by this kind of document
+		log.debug("VisionMate: no position for this text")
 		return None
 	return rects[0] if rects else None
 

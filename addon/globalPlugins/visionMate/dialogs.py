@@ -7,6 +7,7 @@
 import os
 import re
 import threading
+import time
 
 import addonHandler
 import api
@@ -27,14 +28,18 @@ USAGE = _(
 	"NVDA+Alt+F: describe the whole screen.\n"
 	"NVDA+Alt+D: describe the image or image file on the clipboard.\n"
 	"Press a command once to hear a quick description. "
-	"Press it twice quickly to get a detailed description in a window you can read, copy and close, "
+	"Press it twice quickly to get a detailed description in a window you can read, copy, save and close, "
 	"and where you can ask questions about the image.\n"
 	"NVDA+Alt+O: open the overlay, which makes a window NVDA cannot read into a list of its texts and icons. "
-	"Press Enter on an item to click it, and Escape to close.\n"
+	"Press Enter on an item to click it, and Escape to close. Control+Alt+arrows move in tables.\n"
+	"NVDA+Alt+E: find something in the current window, like the Save button, and click it.\n"
 	"NVDA+Alt+G: turn automatic descriptions on or off. When on, images that have no label "
 	"are described as you read web pages and documents.\n"
 	"NVDA+Alt+B: turn button names on or off. When on, buttons that have no name are named from their icon.\n"
 	"NVDA+Alt+N: give your own name to the current button, or to the current item in the overlay.\n"
+	"NVDA+Alt+P: hear how far a description is. NVDA+Alt+X: stop it.\n"
+	"NVDA+Alt+U: pointer mode, to work the mouse with the arrow keys. NVDA+Alt+Q: controller mode.\n"
+	"NVDA+Alt+Y: take the help VisionMate offers where a window tells NVDA little.\n"
 	"Press Control to stop speaking.\n"
 	"VisionMate uses AI, and AI can make mistakes, so please double-check anything important.\n"
 	"Everything runs on your computer. Images are never sent to the internet."
@@ -48,7 +53,7 @@ def _mb(n):
 class DataDialog(wx.Dialog):
 	"""Downloads and installs the vision data. Enter starts, Space reads progress while working."""
 
-	def __init__(self, parent, dataInfo, dataDir, onInstalled, isUpdate=False):
+	def __init__(self, parent, dataInfo, dataDir, onInstalled, isUpdate=False, installPortable=None):
 		# Translators: Title of the VisionMate data download window.
 		super().__init__(parent, title=_("VisionMate"))
 		self._info = dataInfo
@@ -57,6 +62,9 @@ class DataDialog(wx.Dialog):
 		self._cancel = threading.Event()
 		self._working = False
 		self._progress = ""
+		# installPortable(folder, onProgress, cancel) copies the vision data from a portable copy.
+		self._installPortable = installPortable
+		self._portableFolder = None
 		sizeMb = _mb(dataInfo["size"])
 		if isUpdate:
 			# Translators: Shown when new vision data is available. {size} is in megabytes.
@@ -75,6 +83,15 @@ class DataDialog(wx.Dialog):
 			warnings = hardware.warnings()
 			if warnings:
 				intro += "\n\n" + "\n".join(warnings)
+			if installPortable is not None:
+				from . import portable
+				found = portable.findOnDrives()
+				if found:
+					self._portableFolder = found
+					# Translators: Shown when a portable copy of VisionMate is on a drive. {drive} is like "E:".
+					intro += "\n\n" + _("A portable copy of the vision data is on drive {drive}. Choose From a "
+						"portable copy to copy it from there instead of downloading.").format(
+						drive=os.path.splitdrive(found)[0])
 
 		main = wx.BoxSizer(wx.VERTICAL)
 		self.text = wx.TextCtrl(self, value=intro, size=(520, 160), style=wx.TE_MULTILINE | wx.TE_READONLY)
@@ -88,6 +105,12 @@ class DataDialog(wx.Dialog):
 		# Translators: Button that closes the window without downloading.
 		self.closeBtn = wx.Button(self, wx.ID_CANCEL, label=_("&Later"))
 		buttons.Add(self.startBtn)
+		self.portableBtn = None
+		if installPortable is not None and not isUpdate:
+			# Translators: Button that copies the vision data from a portable copy instead of downloading it.
+			self.portableBtn = wx.Button(self, label=_("From a &portable copy..."))
+			buttons.Add(self.portableBtn, flag=wx.LEFT, border=10)
+			self.portableBtn.Bind(wx.EVT_BUTTON, lambda e: self._fromPortable())
 		buttons.Add(self.closeBtn, flag=wx.LEFT, border=10)
 		main.Add(buttons, flag=wx.ALL | wx.ALIGN_RIGHT, border=10)
 		self.SetSizerAndFit(main)
@@ -138,6 +161,57 @@ class DataDialog(wx.Dialog):
 		self.Fit()
 		threading.Thread(target=self._work, name="visionMate-data", daemon=True).start()
 
+	def _fromPortable(self):
+		"""Copy the vision data from a portable copy, like one on a flash drive, instead of downloading it."""
+		if self._working:
+			return
+		folder = self._portableFolder
+		if folder is None:
+			# Translators: Title of the window for choosing a portable copy's folder.
+			with wx.DirDialog(self, _("Choose the folder VisionMate portable, or its vision data folder")) as dlg:
+				if dlg.ShowModal() != wx.ID_OK:
+					return
+				folder = dlg.GetPath()
+		self._working = True
+		self._cancel.clear()
+		self.startBtn.Hide()
+		if self.portableBtn is not None:
+			self.portableBtn.Hide()
+		self.closeBtn.SetLabel(_("&Cancel"))
+		self.gauge.SetValue(0)
+		self.gauge.Show()
+		# Translators: Progress while the vision data is copied from a portable copy.
+		self._progress = _("Copying the vision data.")
+		self._setText(_("Copying the vision data from the portable copy. Press Space to hear the progress."))
+		self.Layout()
+		self.Fit()
+
+		def copied(done, total):
+			pct = done * 100 // max(total, 1)
+			# Translators: Progress while copying from a portable copy. {pct} is a percentage.
+			self._progress = _("Copying, {pct} percent.").format(pct=pct)
+			self._after(lambda v: self.gauge.SetValue(v), min(pct, 100))
+
+		def work():
+			try:
+				ok = self._installPortable(folder, copied, self._cancel)
+			except Exception as e:
+				log.error("VisionMate: copying from a portable copy failed", exc_info=True)
+				self._after(self._failed, str(e))
+				return
+			if ok:
+				self._after(self._finishedPortable)
+
+		threading.Thread(target=work, name="visionMate-data", daemon=True).start()
+
+	def _finishedPortable(self):
+		self._working = False
+		self.gauge.Hide()
+		self.closeBtn.SetLabel(_("&Close"))
+		# Translators: Shown when the vision data was copied from a portable copy, followed by the usage guide.
+		self._setText(_("The vision data was copied. VisionMate is ready to use.") + "\n\n" + USAGE)
+		self.Layout()
+
 	def _work(self):
 		os.makedirs(self._dataDir, exist_ok=True)
 		pack = os.path.join(self._dataDir, "download.vmdata")
@@ -156,12 +230,24 @@ class DataDialog(wx.Dialog):
 			self._progress = _("Preparing the data, {pct} percent.").format(pct=pct)
 			self._after(lambda v: self.gauge.SetValue(v), min(pct, 100))
 
+		def retrying(attempt, seconds):
+			# Translators: Progress when the connection dropped and the download resumes by itself.
+			self._progress = _("The connection dropped. Trying again in {seconds} seconds.").format(seconds=seconds)
+			log.debugWarning(f"VisionMate: data download dropped, retry {attempt} in {seconds} s")
+
 		try:
-			net.download(self._info["url"], pack, total, self._info.get("sha256"), downloaded, self._cancel)
+			# The unpacked data is about as big as the download, and both are on disk until unpacking ends.
+			net.checkSpace(pack, total, total)
+			net.downloadWithRetries(self._info["url"], pack, total, self._info.get("sha256"), downloaded,
+				self._cancel, retrying)
 			ok = datapack.install(pack, self._dataDir, unpacked, self._cancel)
 			os.remove(pack)
 		except net.Cancelled:
 			ok = False
+		except net.NotEnoughSpace as e:
+			log.error(f"VisionMate: {e}")
+			self._after(self._noSpace, e)
+			return
 		except (OSError, ValueError) as e:
 			log.error("VisionMate: data download failed", exc_info=True)
 			self._after(self._failed, str(e))
@@ -204,6 +290,17 @@ class DataDialog(wx.Dialog):
 			).format(error=error))
 		self.Layout()
 
+	def _noSpace(self, e):
+		self._failed("")
+		drive = os.path.splitdrive(e.folder)[0] or e.folder
+		# Translators: Shown when the disk is too full for the vision data. {drive} is like "C:"; sizes in MB.
+		self._setText(_(
+			"There is not enough free space on drive {drive}. VisionMate needs about {needed} MB free, "
+			"and there is {free} MB free.\n\n"
+			"Free some space, then press Enter to try again."
+		).format(drive=drive, needed=_mb(e.needed), free=_mb(e.free)))
+		self.Layout()
+
 	def _onClose(self, evt):
 		if self._working:
 			# Keep the partial download so the next attempt resumes.
@@ -214,10 +311,11 @@ class DataDialog(wx.Dialog):
 
 
 class ResultDialog(wx.Dialog):
-	"""Shows a description so it can be read line by line, copied and closed.
-	With onAsk, it also has a box for questions about the image: onAsk(question, dialog)."""
+	"""Shows a description so it can be read line by line, copied, saved and closed.
+	With onAsk, it also has a box for questions about the image: onAsk(question, dialog), and quick buttons for
+	common questions. actions is a list of (label, fn(dialog)) for buttons that do more than ask, like reading text."""
 
-	def __init__(self, parent, text, onAsk=None):
+	def __init__(self, parent, text, onAsk=None, actions=()):
 		# Translators: Title of the window showing a detailed description.
 		super().__init__(parent, title=_("VisionMate description"))
 		self._text = text
@@ -239,30 +337,97 @@ class ResultDialog(wx.Dialog):
 			main.Add(ask, flag=wx.LEFT | wx.RIGHT | wx.EXPAND, border=10)
 			self.question.Bind(wx.EVT_TEXT_ENTER, lambda e: self.ask())
 			askBtn.Bind(wx.EVT_BUTTON, lambda e: self.ask())
+		quick = list(actions)
+		if onAsk is not None:
+			quick += [
+				# Translators: Button in the description window that asks about the people in the image.
+				(_("Describe &people"), lambda d: d.ask(_(
+					"Describe the people in this image: how many, what they look like, what they wear and do."), True)),
+				# Translators: Button in the description window that asks about the colours in the image.
+				(_("Describe c&olours"), lambda d: d.ask(_("What are the main colours in this image, and where are they?"), True)),
+				# Translators: Button in the description window that starts a "where is" question.
+				(_("&Where is..."), lambda d: d.startQuestion(_("Where is the "))),
+			]
+		if quick:
+			row = wx.BoxSizer(wx.HORIZONTAL)
+			for i, (label, fn) in enumerate(quick):
+				btn = wx.Button(self, label=label)
+				btn.Bind(wx.EVT_BUTTON, lambda e, fn=fn: fn(self))
+				row.Add(btn, flag=wx.LEFT if i else 0, border=8)
+			main.Add(row, flag=wx.LEFT | wx.RIGHT | wx.TOP, border=10)
 		buttons = wx.BoxSizer(wx.HORIZONTAL)
 		# Translators: Button that copies the description to the clipboard.
 		copyBtn = wx.Button(self, label=_("&Copy"))
 		# Translators: Button that closes the description window.
 		closeBtn = wx.Button(self, wx.ID_CLOSE, label=_("C&lose"))
+		# Translators: Button that saves the description and any questions and answers to a text file.
+		saveBtn = wx.Button(self, label=_("&Save..."))
 		buttons.Add(copyBtn)
+		buttons.Add(saveBtn, flag=wx.LEFT, border=10)
 		buttons.Add(closeBtn, flag=wx.LEFT, border=10)
 		main.Add(buttons, flag=wx.ALL | wx.ALIGN_RIGHT, border=10)
 		self.SetSizerAndFit(main)
 		self.SetEscapeId(wx.ID_CLOSE)
 		self.CentreOnScreen()
 		copyBtn.Bind(wx.EVT_BUTTON, lambda e: api.copyToClip(self.textCtrl.GetValue(), notify=True))
+		saveBtn.Bind(wx.EVT_BUTTON, lambda e: self.save())
+		saveId = wx.NewIdRef()
+		self.Bind(wx.EVT_MENU, lambda e: self.save(), id=saveId)
+		self.SetAcceleratorTable(wx.AcceleratorTable([(wx.ACCEL_CTRL, ord("S"), saveId)]))
 		closeBtn.Bind(wx.EVT_BUTTON, lambda e: self.Destroy())
 		self.Bind(wx.EVT_CLOSE, lambda e: self.Destroy())
 		self.textCtrl.SetFocus()
 		self.textCtrl.SetInsertionPoint(0)
 
-	def ask(self):
-		question = self.question.GetValue().strip() if self.question else ""
+	def ask(self, question=None, trusted=False):
+		"""Ask the typed question, or the given one. trusted questions (from the quick buttons) are known to be
+		about the image, so the check for off-topic questions is skipped and the answer comes sooner."""
+		if question is None:
+			question = self.question.GetValue().strip() if self.question else ""
+			if question and not self.asking and self._onAsk is not None:
+				self.question.Clear()
 		if not question or self.asking or self._onAsk is None:
 			return
-		self.question.Clear()
 		self.asking = True
-		self._onAsk(question, self)
+		self._onAsk(question, self, trusted)
+
+	def startQuestion(self, start):
+		"""Put the start of a question in the box, so the user only types the rest."""
+		if self.question is None:
+			return
+		self.question.SetValue(start)
+		self.question.SetFocus()
+		self.question.SetInsertionPointEnd()
+
+	def addSection(self, title, text):
+		"""Add a titled piece of text, like the text read from the image."""
+		self.appendText(f"\n\n{title}\n{text}")
+
+	def defaultFileName(self):
+		# Translators: Start of the file name when a description is saved. The date and time follow.
+		return _("VisionMate description") + time.strftime(" %Y-%m-%d %H%M") + ".txt"
+
+	def save(self, path=None):
+		"""Save everything in the window to a text file. Asks where unless path is given. Returns the path or None."""
+		if path is None:
+			# Translators: Title of the window for choosing where to save a description.
+			with wx.FileDialog(self, _("Save description"), defaultDir=os.path.join(os.path.expanduser("~"), "Documents"),
+					defaultFile=self.defaultFileName(), wildcard=_("Text files (*.txt)|*.txt"),
+					style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT) as dlg:
+				if dlg.ShowModal() != wx.ID_OK:
+					return None
+				path = dlg.GetPath()
+		try:
+			with open(path, "w", encoding="utf-8-sig") as f:
+				f.write(self.textCtrl.GetValue().replace("\r\n", "\n"))
+		except OSError as e:
+			log.error(f"VisionMate: could not save the description to {path}", exc_info=True)
+			# Translators: Reported when the description could not be saved. {error} is the reason.
+			ui.message(_("Could not save: {error}").format(error=e.strerror or e))
+			return None
+		# Translators: Reported after the description was saved. {name} is the file name.
+		ui.message(_("Saved {name}").format(name=os.path.basename(path)))
+		return path
 
 	def addAnswer(self, question, answer):
 		"""Called on the GUI thread when an answer is complete."""
@@ -289,7 +454,8 @@ class StreamingResult:
 
 	_FIRST = re.compile(r"[.!?。！？]\s")
 
-	def __init__(self, onOpened, onAsk=None):
+	def __init__(self, onOpened, onAsk=None, actions=()):
+		self._actions = actions
 		self._text = ""
 		self._shown = 0
 		self._requested = False
@@ -310,7 +476,7 @@ class StreamingResult:
 		wx.CallAfter(self._finish, finalText)
 
 	def _open(self):
-		self._dialog = ResultDialog(gui.mainFrame, _streamClean(self._text), self._onAsk)
+		self._dialog = ResultDialog(gui.mainFrame, _streamClean(self._text), self._onAsk, self._actions)
 		self._shown = len(self._text)
 		show(self._dialog)
 		self._onOpened()
