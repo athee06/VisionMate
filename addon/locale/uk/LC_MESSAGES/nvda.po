@@ -1,0 +1,607 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: \n"
+"POT-Creation-Date: 2026-10-27 13:24+0200\n"
+"PO-Revision-Date: 2026-10-29 15:15+0200\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Language: uk\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: Poedit 3.10\n"
+"X-Poedit-Basepath: ..\n"
+"X-Poedit-SearchPath-0: globalPlugins\n"
+"X-Poedit-SearchPath-1: installTasks.py\n"
+"X-Poedit-SearchPath-2: engine\n"
+
+#: globalPlugins/visionMate/__init__.py:345
+msgid ""
+"The screen curtain is on and VisionMate cannot see this. Please turn the "
+"screen curtain off with NVDA+Control+Escape and try again."
+msgstr ""
+"Увімкнено екранну завісу, і VisionMate не може розпізнати зображення. Будь "
+"ласка, вимкніть екранну завісу за допомогою комбінації клавіш "
+"NVDA+Control+Escape і спробуйте ще раз."
+
+#: globalPlugins/visionMate/__init__.py:350
+#: globalPlugins/visionMate/dialogs.py:53
+#: globalPlugins/visionMate/settings.py:20
+msgid "VisionMate"
+msgstr "VisionMate"
+
+#: globalPlugins/visionMate/__init__.py:520
+msgid ""
+"VisionMate cannot find its vision data download. Please reinstall the add-on."
+msgstr ""
+"VisionMate не може знайти файл із даними для розпізнавання зображень. Будь "
+"ласка, перевстановіть цей додаток."
+
+#: globalPlugins/visionMate/__init__.py:611
+#: globalPlugins/visionMate/__init__.py:982
+#: globalPlugins/visionMate/__init__.py:1078
+#: globalPlugins/visionMate/__init__.py:1245
+#: globalPlugins/visionMate/__init__.py:1300
+msgid "Image: "
+msgstr "Зображення: "
+
+#: globalPlugins/visionMate/__init__.py:644
+#, python-brace-format
+msgid "Could not describe the image: {error}"
+msgstr "Не вдалося описати зображення: {error}"
+
+#: globalPlugins/visionMate/__init__.py:660
+msgid "No description was produced."
+msgstr "Опис не було надано."
+
+#: globalPlugins/visionMate/__init__.py:679
+msgid "Please wait until the description is finished."
+msgstr "Будь ласка, зачекайте, поки опис буде завершено."
+
+#: globalPlugins/visionMate/__init__.py:692
+msgid "I can only answer questions about this image."
+msgstr "Я можу відповісти лише на запитання щодо цього зображення."
+
+#: globalPlugins/visionMate/__init__.py:741
+#, python-brace-format
+msgid "Could not answer the question: {error}"
+msgstr "Не вдалося відповісти на запитання: {error}"
+
+#: globalPlugins/visionMate/__init__.py:993
+msgid "Turns automatic descriptions of images without a label on or off."
+msgstr "Вмикає або вимикає автоматичні описи зображень без підпису."
+
+#: globalPlugins/visionMate/__init__.py:1003
+msgid "Automatic image descriptions on"
+msgstr "Автоматичні описи зображень увімкнено"
+
+#: globalPlugins/visionMate/__init__.py:1005
+msgid "Automatic image descriptions off"
+msgstr "Автоматичні описи зображень вимкнено"
+
+#: globalPlugins/visionMate/__init__.py:1134
+msgid "Getting the photo"
+msgstr "Отримання зображення"
+
+#: globalPlugins/visionMate/__init__.py:1147
+msgid "Could not get the photo from WinZapp."
+msgstr "Не вдалося отримати зображення з WinZapp."
+
+#: globalPlugins/visionMate/__init__.py:1364
+#: globalPlugins/visionMate/__init__.py:1372
+#, python-brace-format
+msgid "Probably {name}"
+msgstr "Ймовірно, {name}"
+
+#: globalPlugins/visionMate/__init__.py:1378
+msgid "Turns naming of buttons that have no name, from their icon, on or off."
+msgstr ""
+"Вмикає або вимикає визначення назв для кнопок без назви за їхньою піктограмою."
+
+#: globalPlugins/visionMate/__init__.py:1388
+msgid "Button names on"
+msgstr "Назви кнопок увімкнено"
+
+#: globalPlugins/visionMate/__init__.py:1390
+msgid "Button names off"
+msgstr "Назви кнопок вимкнено"
+
+#: globalPlugins/visionMate/__init__.py:1395
+msgid ""
+"Gives your own name to the current button, or to the current item in the "
+"overlay."
+msgstr "Дає власну назву поточній кнопці або поточному елементу в накладанні."
+
+#: globalPlugins/visionMate/__init__.py:1414
+msgid "No item here to name."
+msgstr "Тут немає елементів, які можна було б назвати."
+
+#: globalPlugins/visionMate/__init__.py:1430
+msgid "Only buttons and items in the overlay can be named."
+msgstr "Назви можна присвоювати лише кнопкам та елементам у накладенні."
+
+#: globalPlugins/visionMate/__init__.py:1440
+msgid "Name (leave empty to remove your name):"
+msgstr "Назва (залиште поле порожнім, щоб видалити свою назву):"
+
+#: globalPlugins/visionMate/__init__.py:1440
+msgid "VisionMate name"
+msgstr "Назва VisionMate"
+
+#: globalPlugins/visionMate/__init__.py:1452
+msgid "Name saved"
+msgstr "Назву збережено"
+
+#: globalPlugins/visionMate/__init__.py:1452
+msgid "Name removed"
+msgstr "Назву видалено"
+
+#: globalPlugins/visionMate/__init__.py:1467
+msgid ""
+"Opens the overlay: the current window as a list of its texts and icons. Enter "
+"clicks an item in the real window, Escape closes."
+msgstr ""
+"Відкриває накладання: показує текст у поточному вікні у вигляді списку та "
+"піктограм. Клавіша Enter активує елемент у вікні, клавіша Escape — закриває "
+"накладне вікно."
+
+#: globalPlugins/visionMate/__init__.py:1496
+msgid "This window has no location on screen."
+msgstr "Це вікно не має розташування на екрані."
+
+#: globalPlugins/visionMate/__init__.py:1505
+msgid "Overlay"
+msgstr "Накладання"
+
+#: globalPlugins/visionMate/__init__.py:1518
+msgid "Could not open the overlay."
+msgstr "Не вдалося відкрити накладання."
+
+#: globalPlugins/visionMate/__init__.py:1622
+msgid "Could not take a picture of the screen."
+msgstr "Не вдалося зробити знімок екрана."
+
+#: globalPlugins/visionMate/__init__.py:1627
+msgid ""
+"Describes the current element. Press twice for a detailed description in a "
+"window."
+msgstr ""
+"Описує поточний елемент. Натисніть двічі, щоб побачити детальний опис у "
+"діалозі."
+
+#: globalPlugins/visionMate/__init__.py:1648
+msgid "This element has no location on screen."
+msgstr "Цей елемент не має розташування на екрані."
+
+#: globalPlugins/visionMate/__init__.py:1693
+msgid ""
+"Describes the current window. Press twice for a detailed description in a "
+"window."
+msgstr ""
+"Описує поточне вікно. Натисніть двічі, щоб переглянути детальний опис у "
+"діалозі."
+
+#: globalPlugins/visionMate/__init__.py:1705
+msgid ""
+"Describes the whole screen. Press twice for a detailed description in a "
+"window."
+msgstr ""
+"Описує весь екран. Натисніть двічі, щоб переглянути детальний опис у діалозі."
+
+#: globalPlugins/visionMate/__init__.py:1716
+msgid ""
+"Describes the image or image file on the clipboard. Press twice for a "
+"detailed description in a window."
+msgstr ""
+"Описує зображення або файл зображення в буфері обміну. ​​Натисніть двічі, щоб "
+"переглянути детальний опис у діалозі."
+
+#: globalPlugins/visionMate/__init__.py:1742
+msgid "No image or image file on the clipboard."
+msgstr "У буфері обміну немає зображення або файлу зображення."
+
+#: globalPlugins/visionMate/dialogs.py:24
+msgid ""
+"How to use VisionMate:\n"
+"NVDA+Alt+A: describe the current element.\n"
+"NVDA+Alt+W: describe the current window.\n"
+"NVDA+Alt+F: describe the whole screen.\n"
+"NVDA+Alt+D: describe the image or image file on the clipboard.\n"
+"Press a command once to hear a quick description. Press it twice quickly to "
+"get a detailed description in a window you can read, copy and close, and "
+"where you can ask questions about the image.\n"
+"NVDA+Alt+O: open the overlay, which makes a window NVDA cannot read into a "
+"list of its texts and icons. Press Enter on an item to click it, and Escape "
+"to close.\n"
+"NVDA+Alt+G: turn automatic descriptions on or off. When on, images that have "
+"no label are described as you read web pages and documents.\n"
+"NVDA+Alt+B: turn button names on or off. When on, buttons that have no name "
+"are named from their icon.\n"
+"NVDA+Alt+N: give your own name to the current button, or to the current item "
+"in the overlay.\n"
+"Press Control to stop speaking.\n"
+"VisionMate uses AI, and AI can make mistakes, so please double-check anything "
+"important.\n"
+"Everything runs on your computer. Images are never sent to the internet."
+msgstr ""
+"Як користуватися VisionMate:\n"
+"NVDA+Alt+A: опис поточного елемента.\n"
+"NVDA+Alt+W: опис поточного вікна.\n"
+"NVDA+Alt+F: опис усього екрана.\n"
+"NVDA+Alt+D: опис зображення або файлу зображення у буфері обміну.\n"
+"Натисніть комбінацію один раз, щоб почути короткий опис. Натисніть її двічі "
+"поспіль, щоб отримати детальний опис у діалозі, яке можна прочитати, "
+"скопіювати та закрити, а також де можна задати питання щодо зображення.\n"
+"NVDA+Alt+O: відкрити накладання, перетворює вікно, яке NVDA не може "
+"прочитати, на список з тексту та піктограм. Натисніть Enter на елементі, щоб "
+"активувати його, та Escape, щоб закрити.\n"
+"NVDA+Alt+G: увімкнути або вимкнути автоматичні описи. Увімкнені описи "
+"дозволяють описувати зображення без міток під час читання веб-сторінок та "
+"документів.\n"
+"NVDA+Alt+B: увімкнути або вимкнути назви кнопок. Увімкнені назви дозволяють "
+"називати кнопки без назв за їхніми піктограмами.\n"
+"NVDA+Alt+N: присвоїти власну назву поточній кнопці або поточному елементу в "
+"накладанні.\n"
+"Натисніть клавішу Control, щоб зупинити озвучування.\n"
+"VisionMate використовує штучний інтелект, а штучний інтелект може "
+"припускатися помилок, тому, будь ласка, перевіряйте все важливе ще раз.\n"
+"Усе працює на вашому комп’ютері. Зображення ніколи не надсилаються в Інтернет."
+
+#: globalPlugins/visionMate/dialogs.py:64
+#, python-brace-format
+msgid ""
+"A new version of the VisionMate vision data is available ({size} MB). Press "
+"Enter to download it now."
+msgstr ""
+"Доступна нова версія даних системи розпізнавання зображень VisionMate ({size} "
+"МБ). Натисніть Enter, щоб завантажити її зараз."
+
+#: globalPlugins/visionMate/dialogs.py:70
+#, python-brace-format
+msgid ""
+"Welcome to VisionMate. VisionMate describes images, screens and on-screen "
+"elements fully offline, on your own computer.\n"
+"\n"
+"To work, VisionMate needs its vision data ({size} MB). It is downloaded only "
+"once. Press Enter to download it now."
+msgstr ""
+"Ласкаво просимо до VisionMate. VisionMate описує зображення, екрани та "
+"елементи на екрані повністю в автономному режимі, на вашому комп’ютері.\n"
+"\n"
+"Для роботи VisionMate потрібні дані для розпізнавання ({size} МБ). Вони "
+"завантажуються лише один раз. Натисніть Enter, щоб завантажити їх зараз."
+
+#: globalPlugins/visionMate/dialogs.py:87
+#, python-brace-format
+msgid "&Download ({size} MB)"
+msgstr "&Завантажити ({size} МБ)"
+
+#: globalPlugins/visionMate/dialogs.py:89
+msgid "&Later"
+msgstr "&Пізніше"
+
+#: globalPlugins/visionMate/dialogs.py:130
+msgid "&Cancel"
+msgstr "&Скасувати"
+
+#: globalPlugins/visionMate/dialogs.py:134
+msgid "Starting download."
+msgstr "Початок завантаження."
+
+#: globalPlugins/visionMate/dialogs.py:136
+msgid ""
+"Downloading the VisionMate vision data. Press Space to hear the progress."
+msgstr ""
+"Завантаження даних системи розпізнавання VisionMate. Натисніть пробіл, щоб "
+"почути повідомлення про перебіг завантаження."
+
+#: globalPlugins/visionMate/dialogs.py:149
+#, python-brace-format
+msgid "Downloading, {pct} percent, {done} of {total} MB."
+msgstr "Завантаження, {pct} відсотків, {done} з {total} МБ."
+
+#: globalPlugins/visionMate/dialogs.py:156
+#, python-brace-format
+msgid "Preparing the data, {pct} percent."
+msgstr "Підготовка даних, {pct} відсотків."
+
+#: globalPlugins/visionMate/dialogs.py:175
+#: globalPlugins/visionMate/dialogs.py:187
+msgid "&Close"
+msgstr "&Закрити"
+
+#: globalPlugins/visionMate/dialogs.py:177
+msgid "Download complete. VisionMate is ready to use."
+msgstr "Завантаження завершено. VisionMate готовий до використання."
+
+#: globalPlugins/visionMate/dialogs.py:185
+msgid "&Try again"
+msgstr "&Спробувати ще раз"
+
+#: globalPlugins/visionMate/dialogs.py:190
+#, python-brace-format
+msgid ""
+"The download did not finish: {error}\n"
+"\n"
+"Check your internet connection and press Enter to try again. The download "
+"continues from where it stopped."
+msgstr ""
+"Завантаження не завершено: {error}\n"
+"\n"
+"Перевірте підключення до Інтернету та натисніть клавішу Enter, щоб спробувати "
+"ще раз. Завантаження продовжиться з того місця, де воно зупинилося."
+
+#: globalPlugins/visionMate/dialogs.py:201
+msgid "Download cancelled."
+msgstr "Завантаження скасовано."
+
+#: globalPlugins/visionMate/dialogs.py:211
+msgid "VisionMate description"
+msgstr "Опис VisionMate"
+
+#: globalPlugins/visionMate/dialogs.py:222
+msgid "&Question about this image:"
+msgstr "&Питання щодо цього зображення:"
+
+#: globalPlugins/visionMate/dialogs.py:226
+msgid "As&k"
+msgstr "&Запитати"
+
+#: globalPlugins/visionMate/dialogs.py:233
+msgid "&Copy"
+msgstr "&Копіювати"
+
+#: globalPlugins/visionMate/dialogs.py:235
+msgid "C&lose"
+msgstr "З&крити"
+
+#: globalPlugins/visionMate/dialogs.py:261
+#, python-brace-format
+msgid ""
+"\n"
+"\n"
+"Question: {question}\n"
+"Answer: {answer}"
+msgstr ""
+"\n"
+"\n"
+"Питання: {question}\n"
+"Відповідь: {answer}"
+
+#: globalPlugins/visionMate/hardware.py:83
+#, python-brace-format
+msgid ""
+"This computer has {gb} GB of memory. VisionMate uses about 3 GB while it is "
+"ready, so it may be slow, and other programs may slow down. You can turn off "
+"\"Get ready when NVDA starts\" in VisionMate settings to save memory."
+msgstr ""
+"Цей комп’ютер має {gb} ГБ оперативної пам’яті. Програма VisionMate "
+"використовує приблизно 3 ГБ, коли перебуває в режимі готовності, тому її "
+"робота може сповільнитися, а також можуть сповільнитися й інші програми. Щоб "
+"заощадити пам’ять, у налаштуваннях VisionMate можна вимкнути функцію «Перейти "
+"в режим готовності під час запуску NVDA»."
+
+#: globalPlugins/visionMate/hardware.py:90
+msgid ""
+"No graphics chip was found that VisionMate can use, so descriptions will run "
+"on the processor and may take 5 to 15 seconds."
+msgstr ""
+"Не виявлено жодного графічного процесора, який міг би використовувати "
+"VisionMate, тому описи будуть виконуватися на процесорі, що може зайняти від "
+"5 до 15 секунд."
+
+#: globalPlugins/visionMate/overlay.py:209
+msgid "Nothing found in this window."
+msgstr "У цьому вікні нічого не знайдено."
+
+#: globalPlugins/visionMate/overlay.py:261
+#, python-brace-format
+msgid "{name} icon"
+msgstr "значок {name}"
+
+#: globalPlugins/visionMate/overlay.py:271
+#, python-brace-format
+msgid "{name} button"
+msgstr "кнопка {name}"
+
+#: globalPlugins/visionMate/overlay.py:271
+msgid "button, naming"
+msgstr "кнопка, назва"
+
+#: globalPlugins/visionMate/overlay.py:273
+msgid "icon, naming"
+msgstr "значок, назва"
+
+#: globalPlugins/visionMate/overlay.py:277
+#, python-brace-format
+msgid "{text} button"
+msgstr "кнопка {text}"
+
+#: globalPlugins/visionMate/overlay.py:280
+#, python-brace-format
+msgid "{text} edit field"
+msgstr "поле редагування {text}"
+
+#: globalPlugins/visionMate/overlay.py:280
+msgid "edit field"
+msgstr "поле редагування"
+
+#: globalPlugins/visionMate/overlay.py:283
+#, python-brace-format
+msgid "{text} heading"
+msgstr "заголовок {text}"
+
+#: globalPlugins/visionMate/overlay.py:286
+#, python-brace-format
+msgid "{text} link"
+msgstr "посилання {text}"
+
+#: globalPlugins/visionMate/overlay.py:289
+msgid "checked"
+msgstr "позначено"
+
+#: globalPlugins/visionMate/overlay.py:289
+msgid "not checked"
+msgstr "не позначено"
+
+#: globalPlugins/visionMate/overlay.py:292
+#, python-brace-format
+msgid "{text} checkbox, {state}"
+msgstr "прапорець {text}, {state}"
+
+#: globalPlugins/visionMate/overlay.py:294
+#, python-brace-format
+msgid "{text} radio button, {state}"
+msgstr "{text} радіокнопка, {state}"
+
+#: globalPlugins/visionMate/overlay.py:302
+msgid "Dialog"
+msgstr "Діалог"
+
+#: globalPlugins/visionMate/overlay.py:302
+msgid "Panel"
+msgstr "Панель"
+
+#: globalPlugins/visionMate/overlay.py:302
+msgid "Top bar"
+msgstr "Верхня панель"
+
+#: globalPlugins/visionMate/overlay.py:302
+msgid "Bottom bar"
+msgstr "Нижня панель"
+
+#: globalPlugins/visionMate/overlay.py:303
+msgid "Left panel"
+msgstr "Ліва панель"
+
+#: globalPlugins/visionMate/overlay.py:303
+msgid "Right panel"
+msgstr "Права панель"
+
+#: globalPlugins/visionMate/overlay.py:303
+msgid "Main area"
+msgstr "Основна область"
+
+#: globalPlugins/visionMate/overlay.py:308
+#, python-brace-format
+msgid "{area}: {title}"
+msgstr "{area}: {title}"
+
+#: globalPlugins/visionMate/overlay.py:310
+#, python-brace-format
+msgid "{area}, {count} items"
+msgstr "{area}, {count} елементів"
+
+#: globalPlugins/visionMate/overlay.py:431
+#, python-brace-format
+msgid "{title}, {count} items"
+msgstr "{title}, {count} елементів"
+
+#: globalPlugins/visionMate/overlay.py:435
+#, python-brace-format
+msgid "Selected: {item}"
+msgstr "Вибрано: {item}"
+
+#: globalPlugins/visionMate/overlay.py:460
+msgid "VisionMate overlay"
+msgstr "Накладання VisionMate"
+
+#: globalPlugins/visionMate/overlay.py:622
+msgid "No next heading"
+msgstr "Немає наступного заголовка"
+
+#: globalPlugins/visionMate/overlay.py:626
+msgid "No previous heading"
+msgstr "Немає попереднього заголовка"
+
+#: globalPlugins/visionMate/overlay.py:630
+msgid "No next button"
+msgstr "Немає наступної кнопки"
+
+#: globalPlugins/visionMate/overlay.py:634
+msgid "No previous button"
+msgstr "Немає попередньої кнопки"
+
+#: globalPlugins/visionMate/overlay.py:638
+msgid "No next edit field"
+msgstr "Немає наступного поля редагування"
+
+#: globalPlugins/visionMate/overlay.py:642
+msgid "No previous edit field"
+msgstr "Немає попереднього поля редагування"
+
+#: globalPlugins/visionMate/overlay.py:646
+msgid "No next checkbox"
+msgstr "Немає наступного прапорця"
+
+#: globalPlugins/visionMate/overlay.py:650
+msgid "No previous checkbox"
+msgstr "Немає попереднього прапорця"
+
+#: globalPlugins/visionMate/overlay.py:654
+msgid "No next link"
+msgstr "Немає наступного посилання"
+
+#: globalPlugins/visionMate/overlay.py:658
+msgid "No previous link"
+msgstr "Немає попереднього посилання"
+
+#: globalPlugins/visionMate/overlay.py:662
+msgid "No next area"
+msgstr "Немає наступної області"
+
+#: globalPlugins/visionMate/overlay.py:666
+msgid "No previous area"
+msgstr "Немає попередньої області"
+
+#: globalPlugins/visionMate/settings.py:35
+msgid ""
+"&Automatically describe images without a label, photos in chats and photos in "
+"image viewers (NVDA+Alt+G)"
+msgstr ""
+"&Автоматично описувати зображення без підписів, зображення в чатах та у "
+"програмах для перегляду зображень (NVDA+Alt+G)"
+
+#: globalPlugins/visionMate/settings.py:38
+msgid ""
+"Describe images further down the page in the bac&kground, so they are ready "
+"sooner"
+msgstr ""
+"Описувати наступні зображення на сторінці у фоновому режимі, щоб вони були "
+"готові швидше"
+
+#: globalPlugins/visionMate/settings.py:41
+msgid "Name buttons that have no &name, from their icon (NVDA+Alt+B)"
+msgstr ""
+"Називати кнопки, які не мають &назви, за їхніми піктограмами (NVDA+Alt+B)"
+
+#: globalPlugins/visionMate/settings.py:44
+msgid "Use Windows &OCR to read screen text exactly"
+msgstr "Використовувати Windows &OCR для точного читання тексту на екрані"
+
+#: globalPlugins/visionMate/settings.py:47
+msgid "Keep the o&verlay up to date as the window changes"
+msgstr "Оновлювати &накладання, коли змінюється вікно"
+
+#: globalPlugins/visionMate/settings.py:49
+msgid "Use the &graphics card (much faster)"
+msgstr "Використовувати &відеокарту (набагато швидше)"
+
+#: globalPlugins/visionMate/settings.py:52
+msgid "Get &ready when NVDA starts (fastest first description, uses memory)"
+msgstr ""
+"Підготуватися &під час запуску NVDA (найшвидший варіант опису, використовує "
+"пам’ять)"
+
+#: globalPlugins/visionMate/settings.py:54
+msgid "Answer in NVDA's &language"
+msgstr "Відповідати мовою &NVDA"
+
+#: globalPlugins/visionMate/settings.py:56
+msgid "Play a soft &tick while waiting for a description"
+msgstr "Відтворювати &звук, поки чекаєте на опис"
+
+#: installTasks.py:16
+#, python-brace-format
+msgid "What's new in VisionMate {version}"
+msgstr "Що нового у VisionMate {version}"
